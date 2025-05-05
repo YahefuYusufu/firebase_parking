@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "369700000583",
+    "firebase_url": "https://fir-parking-be8a1-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "fir-parking-be8a1",
+    "storage_bucket": "fir-parking-be8a1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:369700000583:android:4c9dad0a508b372f957262",
+        "android_client_info": {
+          "package_name": "com.example.firebase_parking"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBoUfaDhWw7xBSvz7a9Yaz4lVzNzkjEJZk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
