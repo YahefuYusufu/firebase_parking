@@ -6,7 +6,7 @@ import 'package:firebase_parking/data/datasources/auth_remote_datasource.dart';
 import 'package:firebase_parking/data/repository/auth_repository_impl.dart';
 import 'package:firebase_parking/domain/repositories/auth_repository.dart';
 import 'package:firebase_parking/firebase_options.dart';
-import 'package:firebase_parking/presentation/blocs/auth/auth_bloc.dart';
+import 'package:firebase_parking/presentation/blocs/auth/auth_bloc.dart' as auth_bloc;
 import 'package:firebase_parking/presentation/blocs/auth/auth_event.dart';
 import 'package:firebase_parking/presentation/blocs/auth/auth_state.dart';
 import 'package:firebase_parking/presentation/pages/auth/complete_profile_screen.dart';
@@ -50,7 +50,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => themeProvider),
         ChangeNotifierProvider(create: (_) => DataProvider()),
-        BlocProvider<AuthBloc>(create: (context) => sl<AuthBloc>()..add(AuthCheckRequested())),
+        BlocProvider<auth_bloc.AuthBloc>(create: (context) => sl<auth_bloc.AuthBloc>()..add(AuthCheckRequested())),
       ],
       child: const MyApp(),
     ),
@@ -64,7 +64,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, _) {
-        return BlocListener<AuthBloc, AuthState>(
+        return BlocListener<auth_bloc.AuthBloc, AuthState>(
           listener: (context, state) {
             // Handle authentication state changes for navigation
             if (state is Unauthenticated) {
@@ -109,5 +109,5 @@ void setupServiceLocator() {
   sl.registerLazySingleton<AuthRemoteDataSource>(() => AuthRemoteDataSourceImpl());
 
   // Register BLoCs
-  sl.registerFactory<AuthBloc>(() => AuthBloc(repository: sl()));
+  sl.registerFactory<auth_bloc.AuthBloc>(() => auth_bloc.AuthBloc(repository: sl()));
 }
