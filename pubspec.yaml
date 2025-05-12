@@ -20,6 +20,7 @@ dependencies:
   flutter_svg: ^2.0.17
   provider: ^6.1.2
   material_design_icons_flutter: ^7.0.7296
+  flutter_dotenv: ^5.1.0
 
   # Firebase implementation
   firebase_core: ^3.13.0
@@ -38,3 +39,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Add this assets section here
+  assets:
+    - .env
