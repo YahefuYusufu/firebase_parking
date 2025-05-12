@@ -1,4 +1,4 @@
-import 'person.dart';
+import '../person/person.dart';
 
 class Vehicle {
   final String? id;

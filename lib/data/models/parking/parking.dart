@@ -1,5 +1,5 @@
-import 'vehicle.dart';
-import 'parking_space.dart';
+import '../vehicles/vehicle.dart';
+import '../parking_space/parking_space.dart';
 
 class Parking {
   final String? id;

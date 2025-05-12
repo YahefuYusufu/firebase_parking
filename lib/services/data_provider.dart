@@ -1,9 +1,9 @@
 import 'package:firebase_parking/data/datasources/mock_data_service.dart';
 import 'package:flutter/material.dart';
-import '../data/models/person.dart';
-import '../data/models/vehicle.dart';
-import '../data/models/parking_space.dart';
-import '../data/models/parking.dart';
+import '../data/models/person/person.dart';
+import '../data/models/vehicles/vehicle.dart';
+import '../data/models/parking_space/parking_space.dart';
+import '../data/models/parking/parking.dart';
 
 class DataProvider extends ChangeNotifier {
   final MockDataService _mockDataService = MockDataService();

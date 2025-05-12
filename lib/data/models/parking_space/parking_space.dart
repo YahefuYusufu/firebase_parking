@@ -1,4 +1,4 @@
-import 'vehicle.dart';
+import '../vehicles/vehicle.dart';
 
 class ParkingSpace {
   final String? id;

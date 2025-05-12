@@ -1,9 +1,11 @@
 // ignore_for_file: avoid_print
+import 'package:cloud_firestore/cloud_firestore.dart'; // Add this import
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_parking/config/theme/app_theme.dart';
 import 'package:firebase_parking/config/theme/theme_provider.dart';
 import 'package:firebase_parking/data/datasources/auth_remote_datasource.dart';
 import 'package:firebase_parking/data/repository/auth_repository_impl.dart';
+import 'package:firebase_parking/data/repository/vehicle_repository_impl.dart';
 import 'package:firebase_parking/domain/repositories/auth_repository.dart';
 import 'package:firebase_parking/firebase_options.dart';
 import 'package:firebase_parking/presentation/blocs/auth/auth_bloc.dart' as auth_bloc;
@@ -24,6 +26,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+
+// Add vehicle imports
+import 'package:firebase_parking/data/datasources/vehicle_remote_datasource.dart';
+import 'package:firebase_parking/domain/repositories/vehicle_repository.dart';
+import 'package:firebase_parking/presentation/blocs/vehicle/vehicle_bloc.dart';
 
 // Global navigator key for navigation outside of context
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -55,6 +62,8 @@ void main() async {
         ChangeNotifierProvider(create: (_) => themeProvider),
         ChangeNotifierProvider(create: (_) => DataProvider()),
         BlocProvider<auth_bloc.AuthBloc>(create: (context) => sl<auth_bloc.AuthBloc>()..add(AuthCheckRequested())),
+        // Add VehicleBloc provider
+        BlocProvider<VehicleBloc>(create: (context) => sl<VehicleBloc>()),
       ],
       child: const MyApp(),
     ),
@@ -89,7 +98,7 @@ class MyApp extends StatelessWidget {
               '/register': (context) => const RegisterScreen(),
               '/home': (context) => const ResponsiveLayout(),
               '/complete_profile': (context) => const CompleteProfileScreen(),
-              '/edit-profile': (context) => const EditProfileScreen(), // Add this line
+              '/edit-profile': (context) => const EditProfileScreen(),
               '/vehicles': (context) => const VehiclesScreen(),
               '/vehicles/add': (context) => const VehicleFormScreen(),
               '/parking': (context) => const ParkingScreen(),
@@ -106,12 +115,18 @@ class MyApp extends StatelessWidget {
 void setupServiceLocator() {
   final sl = ServiceLocator.instance;
 
+  // External dependencies
+  sl.registerLazySingleton(() => FirebaseFirestore.instance);
+
   // Register repositories
   sl.registerLazySingleton<AuthRepository>(() => AuthRepositoryImpl(remoteDataSource: sl()));
+  sl.registerLazySingleton<VehicleRepository>(() => VehicleRepositoryImpl(remoteDataSource: sl()));
 
   // Register data sources
   sl.registerLazySingleton<AuthRemoteDataSource>(() => AuthRemoteDataSourceImpl());
+  sl.registerLazySingleton<VehicleRemoteDataSource>(() => VehicleRemoteDataSourceImpl(firestore: sl()));
 
   // Register BLoCs
   sl.registerFactory<auth_bloc.AuthBloc>(() => auth_bloc.AuthBloc(repository: sl()));
+  sl.registerFactory<VehicleBloc>(() => VehicleBloc(repository: sl()));
 }
