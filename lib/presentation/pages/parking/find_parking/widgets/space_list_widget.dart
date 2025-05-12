@@ -1,4 +1,4 @@
-import 'package:firebase_parking/data/models/parking_space.dart';
+import 'package:firebase_parking/data/models/parking_space/parking_space.dart';
 import 'package:firebase_parking/presentation/pages/parking/shared/parking_space_card.dart';
 import 'package:flutter/material.dart';
 

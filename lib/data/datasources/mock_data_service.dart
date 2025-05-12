@@ -1,7 +1,7 @@
-import 'package:firebase_parking/data/models/parking.dart';
-import 'package:firebase_parking/data/models/parking_space.dart';
-import 'package:firebase_parking/data/models/person.dart';
-import 'package:firebase_parking/data/models/vehicle.dart';
+import 'package:firebase_parking/data/models/parking/parking.dart';
+import 'package:firebase_parking/data/models/parking_space/parking_space.dart';
+import 'package:firebase_parking/data/models/person/person.dart';
+import 'package:firebase_parking/data/models/vehicles/vehicle.dart';
 
 class MockDataService {
   // Singleton pattern

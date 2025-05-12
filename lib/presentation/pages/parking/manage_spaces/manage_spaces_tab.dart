@@ -1,5 +1,5 @@
 import 'package:firebase_parking/config/theme/park_os_colors.dart';
-import 'package:firebase_parking/data/models/parking_space.dart';
+import 'package:firebase_parking/data/models/parking_space/parking_space.dart';
 import 'package:flutter/material.dart';
 import 'widgets/space_creation_form.dart';
 import 'widgets/space_edit_form.dart';

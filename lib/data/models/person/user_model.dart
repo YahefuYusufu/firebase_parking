@@ -2,7 +2,7 @@
 // ignore_for_file: avoid_print
 
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import '../../domain/entities/user_entity.dart';
+import '../../../domain/entities/user_entity.dart';
 
 class UserModel {
   final String? id;

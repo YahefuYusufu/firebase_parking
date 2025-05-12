@@ -1,14 +1,16 @@
 import 'package:firebase_parking/config/theme/park_os_colors.dart';
-import 'package:firebase_parking/data/models/person.dart';
-import 'package:firebase_parking/data/models/vehicle.dart';
-import 'package:firebase_parking/services/data_provider.dart';
+import 'package:firebase_parking/domain/entities/vehicle_entity.dart';
+import 'package:firebase_parking/presentation/blocs/auth/auth_bloc.dart';
+import 'package:firebase_parking/presentation/blocs/auth/auth_state.dart';
+import 'package:firebase_parking/presentation/blocs/vehicle/vehicle_bloc.dart';
+import 'package:firebase_parking/presentation/blocs/vehicle/vehicle_event.dart';
+import 'package:firebase_parking/presentation/blocs/vehicle/vehicle_state.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
-import 'package:provider/provider.dart';
-
 class VehicleFormScreen extends StatefulWidget {
-  final Vehicle? vehicle; // Optional vehicle for editing
+  final VehicleEntity? vehicle; // Changed from Vehicle to VehicleEntity
 
   const VehicleFormScreen({super.key, this.vehicle});
 
@@ -21,10 +23,10 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
 
   // Form field controllers
   late TextEditingController _registrationController;
-  late TextEditingController _typeController;
-  String? _selectedOwnerId;
+  late String _selectedType; // Changed to handle VehicleType enum
+  String? _ownerId;
 
-  bool _isLoading = false;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -32,19 +34,18 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
 
     // Initialize controllers with existing vehicle data if in edit mode
     _registrationController = TextEditingController(text: widget.vehicle?.registrationNumber ?? '');
-    _typeController = TextEditingController(text: widget.vehicle?.type ?? '');
-    _selectedOwnerId = widget.vehicle?.ownerId;
+    _selectedType = widget.vehicle?.type ?? VehicleType.car.name;
 
-    // Ensure data provider is initialized
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<DataProvider>().initialize();
-    });
+    // Get current user ID from auth state
+    final authState = context.read<AuthBloc>().state;
+    if (authState is Authenticated) {
+      _ownerId = widget.vehicle?.ownerId ?? authState.user.id;
+    }
   }
 
   @override
   void dispose() {
     _registrationController.dispose();
-    _typeController.dispose();
     super.dispose();
   }
 
@@ -55,161 +56,123 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        // Explicitly define the leading icon
         leading: IconButton(icon: Icon(MdiIcons.arrowLeft), onPressed: () => Navigator.pop(context)),
         title: Text(widget.vehicle == null ? 'Add Vehicle' : 'Edit Vehicle'),
       ),
-      body: Consumer<DataProvider>(
-        builder: (context, dataProvider, child) {
-          // Show loading while data initializes
-          if (!dataProvider.initialized) {
-            return const Center(child: CircularProgressIndicator());
+      body: BlocListener<VehicleBloc, VehicleState>(
+        listener: (context, state) {
+          if (state is VehicleOperationSuccess) {
+            // Navigate back on success
+            Navigator.pop(context);
+          } else if (state is VehicleError) {
+            // Show error
+            setState(() => _isSubmitting = false);
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(state.message), backgroundColor: ParkOSColors.errorRed));
           }
-
-          final persons = dataProvider.persons;
-
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Registration Number field
-                  TextFormField(
-                    controller: _registrationController,
-                    decoration: InputDecoration(labelText: 'Registration Number', hintText: 'Enter vehicle registration number', prefixIcon: Icon(MdiIcons.cardText)),
-                    textCapitalization: TextCapitalization.characters,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter a registration number';
-                      }
-                      return null;
-                    },
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Vehicle Type field
-                  TextFormField(
-                    controller: _typeController,
-                    decoration: InputDecoration(labelText: 'Vehicle Type', hintText: 'Enter vehicle type (e.g., Sedan, SUV)', prefixIcon: Icon(MdiIcons.car)),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter a vehicle type';
-                      }
-                      return null;
-                    },
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Owner Dropdown
-                  DropdownButtonFormField<String>(
-                    decoration: InputDecoration(
-                      labelText: 'Owner',
-                      prefixIcon: Icon(MdiIcons.account),
-                      isCollapsed: false,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      // Make sure suffixIcon isn't conflicting with dropdown icon
-                      suffixIcon: null,
-                    ),
-                    // Add this to customize the dropdown icon
-                    icon: Icon(MdiIcons.menuDown),
-                    // Rest of your code remains the same
-                    value: _selectedOwnerId,
-                    hint: const Text('Select owner'),
-                    // ...
-
-                    // Add this to ensure the dropdown isn't too wide
-                    isExpanded: true,
-                    items:
-                        persons.map((Person person) {
-                          return DropdownMenuItem<String>(
-                            value: person.id,
-                            // Use a more compact display for the name
-                            child: Text('${person.name} (${person.personalNumber})', overflow: TextOverflow.ellipsis),
-                          );
-                        }).toList(),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please select an owner';
-                      }
-                      return null;
-                    },
-                    onChanged: (String? newValue) {
-                      setState(() {
-                        _selectedOwnerId = newValue;
-                      });
-                    },
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Submit Button
-                  ElevatedButton.icon(
-                    onPressed: _isLoading ? null : () => _submitForm(dataProvider),
-                    icon:
-                        _isLoading
-                            ? Container(width: 24, height: 24, padding: const EdgeInsets.all(2.0), child: const CircularProgressIndicator(strokeWidth: 3))
-                            : Icon(widget.vehicle == null ? MdiIcons.plus : MdiIcons.contentSave),
-                    label: Text(widget.vehicle == null ? 'Add Vehicle' : 'Save Changes'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isDark ? ParkOSColors.terminalGreen : ParkOSColors.darkGreen,
-                      foregroundColor: isDark ? Colors.black : Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
         },
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Registration Number field
+                TextFormField(
+                  controller: _registrationController,
+                  decoration: InputDecoration(labelText: 'Registration Number', hintText: 'Enter vehicle registration number', prefixIcon: Icon(MdiIcons.cardText)),
+                  textCapitalization: TextCapitalization.characters,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter a registration number';
+                    }
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // Vehicle Type dropdown
+                DropdownButtonFormField<String>(
+                  decoration: InputDecoration(labelText: 'Vehicle Type', prefixIcon: Icon(MdiIcons.car)),
+                  value: _selectedType,
+                  items:
+                      VehicleType.values.map((type) {
+                        return DropdownMenuItem<String>(value: type.name, child: Text(type.displayName));
+                      }).toList(),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please select a vehicle type';
+                    }
+                    return null;
+                  },
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      _selectedType = newValue!;
+                    });
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // Owner information (read-only)
+                if (_ownerId != null) ...[
+                  TextFormField(decoration: InputDecoration(labelText: 'Owner', prefixIcon: Icon(MdiIcons.account)), initialValue: _getOwnerDisplay(), enabled: false),
+                  const SizedBox(height: 24),
+                ],
+
+                // Submit Button
+                BlocBuilder<VehicleBloc, VehicleState>(
+                  builder: (context, state) {
+                    final isLoading = state is VehicleOperationInProgress || _isSubmitting;
+
+                    return ElevatedButton.icon(
+                      onPressed: isLoading ? null : _submitForm,
+                      icon:
+                          isLoading
+                              ? Container(width: 24, height: 24, padding: const EdgeInsets.all(2.0), child: const CircularProgressIndicator(strokeWidth: 3, color: Colors.white))
+                              : Icon(widget.vehicle == null ? MdiIcons.plus : MdiIcons.contentSave),
+                      label: Text(widget.vehicle == null ? 'Add Vehicle' : 'Save Changes'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isDark ? ParkOSColors.terminalGreen : ParkOSColors.darkGreen,
+                        foregroundColor: isDark ? Colors.black : Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  Future<void> _submitForm(DataProvider dataProvider) async {
-    // Validate form
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
+  String? _getOwnerDisplay() {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is Authenticated) {
+      return authState.user.name ?? authState.user.email;
+    }
+    return 'Current User';
+  }
 
-      try {
-        // Get selected owner's data
-        final selectedOwner = dataProvider.persons.firstWhere((person) => person.id == _selectedOwnerId);
+  Future<void> _submitForm() async {
+    if (_formKey.currentState!.validate() && _ownerId != null) {
+      setState(() => _isSubmitting = true);
 
-        // Create or update vehicle
-        if (widget.vehicle == null) {
-          // Create new vehicle
-          final newVehicle = Vehicle(registrationNumber: _registrationController.text.toUpperCase(), type: _typeController.text, ownerId: _selectedOwnerId!, owner: selectedOwner);
+      final vehicleBloc = context.read<VehicleBloc>();
 
-          await dataProvider.createVehicle(newVehicle);
+      if (widget.vehicle == null) {
+        // Create new vehicle
+        final newVehicle = VehicleEntity(registrationNumber: _registrationController.text.toUpperCase(), type: _selectedType, ownerId: _ownerId!, ownerName: _getOwnerDisplay());
 
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vehicle added successfully')));
-        } else {
-          // Update existing vehicle
-          final updatedVehicle = Vehicle(
-            id: widget.vehicle!.id,
-            registrationNumber: _registrationController.text.toUpperCase(),
-            type: _typeController.text,
-            ownerId: _selectedOwnerId!,
-            owner: selectedOwner,
-          );
+        vehicleBloc.add(AddVehicle(newVehicle));
+      } else {
+        // Update existing vehicle
+        final updatedVehicle = widget.vehicle!.copyWith(registrationNumber: _registrationController.text.toUpperCase(), type: _selectedType);
 
-          await dataProvider.updateVehicle(updatedVehicle);
-
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vehicle updated successfully')));
-        }
-
-        // Navigate back
-        if (!mounted) return;
-        Navigator.pop(context);
-      } catch (e) {
-        // Handle errors
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+        vehicleBloc.add(UpdateVehicle(updatedVehicle));
       }
     }
   }

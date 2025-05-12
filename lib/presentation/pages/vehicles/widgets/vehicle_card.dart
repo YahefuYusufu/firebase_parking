@@ -1,10 +1,10 @@
 import 'package:firebase_parking/config/theme/park_os_colors.dart';
-import 'package:firebase_parking/data/models/vehicle.dart';
+import 'package:firebase_parking/domain/entities/vehicle_entity.dart';
 import 'package:flutter/material.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 
 class VehicleCard extends StatelessWidget {
-  final Vehicle vehicle;
+  final VehicleEntity vehicle; // Changed from Vehicle to VehicleEntity
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onPark;
@@ -48,7 +48,7 @@ class VehicleCard extends StatelessWidget {
               const SizedBox(height: 8),
 
               // Vehicle details
-              Text('${vehicle.type} - Owned by ${vehicle.owner?.name ?? 'Unknown'}', style: theme.textTheme.bodyMedium),
+              Text('${vehicle.type} - Owned by ${vehicle.ownerName ?? 'Unknown'}', style: theme.textTheme.bodyMedium),
 
               // Parking location if parked
               if (isParked) ...[
