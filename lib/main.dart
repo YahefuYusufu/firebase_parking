@@ -1,16 +1,26 @@
 // ignore_for_file: avoid_print
-import 'package:cloud_firestore/cloud_firestore.dart'; // Add this import
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_parking/config/theme/app_theme.dart';
 import 'package:firebase_parking/config/theme/theme_provider.dart';
 import 'package:firebase_parking/data/datasources/auth_remote_datasource.dart';
+import 'package:firebase_parking/data/datasources/vehicle_remote_datasource.dart';
 import 'package:firebase_parking/data/repository/auth_repository_impl.dart';
 import 'package:firebase_parking/data/repository/vehicle_repository_impl.dart';
 import 'package:firebase_parking/domain/repositories/auth_repository.dart';
+import 'package:firebase_parking/domain/repositories/vehicle_repository.dart';
+import 'package:firebase_parking/domain/usecases/vehicles/add_vehicle.dart';
+import 'package:firebase_parking/domain/usecases/vehicles/check_registration_exists.dart';
+import 'package:firebase_parking/domain/usecases/vehicles/delete_vehicle.dart';
+import 'package:firebase_parking/domain/usecases/vehicles/get_user_vehicles.dart';
+import 'package:firebase_parking/domain/usecases/vehicles/get_vehicle_by_id.dart';
+import 'package:firebase_parking/domain/usecases/vehicles/search_vehicles_by_registration.dart';
+import 'package:firebase_parking/domain/usecases/vehicles/update_vehicle.dart';
 import 'package:firebase_parking/firebase_options.dart';
 import 'package:firebase_parking/presentation/blocs/auth/auth_bloc.dart' as auth_bloc;
 import 'package:firebase_parking/presentation/blocs/auth/auth_event.dart';
 import 'package:firebase_parking/presentation/blocs/auth/auth_state.dart';
+import 'package:firebase_parking/presentation/blocs/vehicle/vehicle_bloc.dart';
 import 'package:firebase_parking/presentation/pages/auth/complete_profile_screen.dart';
 import 'package:firebase_parking/presentation/pages/auth/login_screen.dart';
 import 'package:firebase_parking/presentation/pages/auth/register_screen.dart';
@@ -26,11 +36,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
-
-// Add vehicle imports
-import 'package:firebase_parking/data/datasources/vehicle_remote_datasource.dart';
-import 'package:firebase_parking/domain/repositories/vehicle_repository.dart';
-import 'package:firebase_parking/presentation/blocs/vehicle/vehicle_bloc.dart';
 
 // Global navigator key for navigation outside of context
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -126,7 +131,27 @@ void setupServiceLocator() {
   sl.registerLazySingleton<AuthRemoteDataSource>(() => AuthRemoteDataSourceImpl());
   sl.registerLazySingleton<VehicleRemoteDataSource>(() => VehicleRemoteDataSourceImpl(firestore: sl()));
 
+  // Register vehicle use cases
+  sl.registerLazySingleton(() => AddVehicle(sl()));
+  sl.registerLazySingleton(() => GetUserVehicles(sl()));
+  sl.registerLazySingleton(() => GetVehicleById(sl()));
+  sl.registerLazySingleton(() => UpdateVehicle(sl()));
+  sl.registerLazySingleton(() => DeleteVehicle(sl()));
+  sl.registerLazySingleton(() => CheckRegistrationExists(sl()));
+  sl.registerLazySingleton(() => SearchVehiclesByRegistration(sl()));
+
   // Register BLoCs
   sl.registerFactory<auth_bloc.AuthBloc>(() => auth_bloc.AuthBloc(repository: sl()));
-  sl.registerFactory<VehicleBloc>(() => VehicleBloc(repository: sl()));
+  sl.registerFactory<VehicleBloc>(
+    () => VehicleBloc(
+      addVehicleUseCase: sl(),
+      getUserVehiclesUseCase: sl(),
+      getVehicleByIdUseCase: sl(),
+      updateVehicleUseCase: sl(),
+      deleteVehicleUseCase: sl(),
+      checkRegistrationExistsUseCase: sl(),
+      searchVehiclesByRegistrationUseCase: sl(),
+      repository: sl(), // Added repository
+    ),
+  );
 }

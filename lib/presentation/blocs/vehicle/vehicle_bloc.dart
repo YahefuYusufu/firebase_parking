@@ -4,14 +4,38 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../domain/repositories/vehicle_repository.dart';
+import '../../../domain/usecases/vehicles/add_vehicle.dart' as add_use_case;
+import '../../../domain/usecases/vehicles/get_user_vehicles.dart';
+import '../../../domain/usecases/vehicles/get_vehicle_by_id.dart';
+import '../../../domain/usecases/vehicles/update_vehicle.dart' as update_use_case;
+import '../../../domain/usecases/vehicles/delete_vehicle.dart' as delete_use_case;
+import '../../../domain/usecases/vehicles/check_registration_exists.dart';
+import '../../../domain/usecases/vehicles/search_vehicles_by_registration.dart' as search_use_case;
 import 'vehicle_event.dart';
 import 'vehicle_state.dart';
 
 class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
-  final VehicleRepository repository;
+  final add_use_case.AddVehicle addVehicleUseCase;
+  final GetUserVehicles getUserVehiclesUseCase;
+  final GetVehicleById getVehicleByIdUseCase;
+  final update_use_case.UpdateVehicle updateVehicleUseCase;
+  final delete_use_case.DeleteVehicle deleteVehicleUseCase;
+  final CheckRegistrationExists checkRegistrationExistsUseCase;
+  final search_use_case.SearchVehiclesByRegistration searchVehiclesByRegistrationUseCase;
+
+  final VehicleRepository repository; // Keep for watchUserVehicles
   StreamSubscription? _vehiclesSubscription;
 
-  VehicleBloc({required this.repository}) : super(VehicleInitial()) {
+  VehicleBloc({
+    required this.addVehicleUseCase,
+    required this.getUserVehiclesUseCase,
+    required this.getVehicleByIdUseCase,
+    required this.updateVehicleUseCase,
+    required this.deleteVehicleUseCase,
+    required this.checkRegistrationExistsUseCase,
+    required this.searchVehiclesByRegistrationUseCase,
+    required this.repository,
+  }) : super(VehicleInitial()) {
     on<LoadUserVehicles>(_onLoadUserVehicles);
     on<AddVehicle>(_onAddVehicle);
     on<UpdateVehicle>(_onUpdateVehicle);
@@ -24,7 +48,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
   Future<void> _onLoadUserVehicles(LoadUserVehicles event, Emitter<VehicleState> emit) async {
     emit(VehicleLoading());
 
-    final result = await repository.getUserVehicles(event.userId);
+    final result = await getUserVehiclesUseCase(GetUserVehiclesParams(userId: event.userId));
 
     result.fold((failure) => emit(VehicleError(failure.message)), (vehicles) => emit(VehicleLoaded(vehicles: vehicles)));
   }
@@ -34,12 +58,11 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
       final currentVehicles = (state as VehicleLoaded).vehicles;
       emit(VehicleOperationInProgress(vehicles: currentVehicles, operation: 'add'));
 
-      final result = await repository.addVehicle(event.vehicle);
+      final result = await addVehicleUseCase(add_use_case.AddVehicleParams(vehicle: event.vehicle));
 
       result.fold((failure) => emit(VehicleError(failure.message)), (newVehicle) {
         final updatedVehicles = [...currentVehicles, newVehicle];
         emit(VehicleOperationSuccess(vehicles: updatedVehicles, message: 'Vehicle added successfully'));
-        // Emit loaded state directly without delay
         emit(VehicleLoaded(vehicles: updatedVehicles));
       });
     }
@@ -50,7 +73,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
       final currentVehicles = (state as VehicleLoaded).vehicles;
       emit(VehicleOperationInProgress(vehicles: currentVehicles, operation: 'update'));
 
-      final result = await repository.updateVehicle(event.vehicle);
+      final result = await updateVehicleUseCase(update_use_case.UpdateVehicleParams(vehicle: event.vehicle));
 
       result.fold((failure) => emit(VehicleError(failure.message)), (updatedVehicle) {
         final updatedVehicles =
@@ -59,7 +82,6 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
             }).toList();
 
         emit(VehicleOperationSuccess(vehicles: updatedVehicles, message: 'Vehicle updated successfully'));
-        // Emit loaded state directly without delay
         emit(VehicleLoaded(vehicles: updatedVehicles));
       });
     }
@@ -70,12 +92,11 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
       final currentVehicles = (state as VehicleLoaded).vehicles;
       emit(VehicleOperationInProgress(vehicles: currentVehicles, operation: 'delete'));
 
-      final result = await repository.deleteVehicle(event.vehicleId);
+      final result = await deleteVehicleUseCase(delete_use_case.DeleteVehicleParams(vehicleId: event.vehicleId));
 
       result.fold((failure) => emit(VehicleError(failure.message)), (_) {
         final updatedVehicles = currentVehicles.where((v) => v.id != event.vehicleId).toList();
         emit(VehicleOperationSuccess(vehicles: updatedVehicles, message: 'Vehicle deleted successfully'));
-        // Emit loaded state directly without delay
         emit(VehicleLoaded(vehicles: updatedVehicles));
       });
     }
@@ -85,7 +106,7 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     if (state is VehicleLoaded) {
       final currentState = state as VehicleLoaded;
 
-      final result = await repository.searchVehiclesByRegistration(event.query);
+      final result = await searchVehiclesByRegistrationUseCase(search_use_case.SearchVehiclesByRegistrationParams(query: event.query));
 
       result.fold((failure) => emit(VehicleError(failure.message)), (searchResults) => emit(currentState.copyWith(searchResults: searchResults)));
     }
@@ -102,6 +123,8 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
     emit(VehicleLoading());
 
     await _vehiclesSubscription?.cancel();
+    // For now, using repository directly for stream
+    // TOO: Create a WatchUserVehicles use case
     _vehiclesSubscription = repository.watchUserVehicles(event.userId).listen((result) {
       result.fold((failure) => emit(VehicleError(failure.message)), (vehicles) => emit(VehicleLoaded(vehicles: vehicles)));
     });
