@@ -24,9 +24,9 @@ class _ParkingScreenState extends State<ParkingScreen> with TickerProviderStateM
     super.dispose();
   }
 
-  void _goBack() {
-    Navigator.of(context).pop();
-  }
+  // void _goBack() {
+  //   Navigator.of(context).pop();
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -37,36 +37,36 @@ class _ParkingScreenState extends State<ParkingScreen> with TickerProviderStateM
           // Top padding for status bar
           SizedBox(height: MediaQuery.of(context).padding.top),
 
-          // Header with back button
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Back button
-                InkWell(
-                  onTap: _goBack,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Theme.of(context).colorScheme.outline.withAlpha(50)),
-                    ),
-                    alignment: Alignment.center,
-                    child: const Text('◀️', style: TextStyle(fontSize: 22)),
-                  ),
-                ),
+          // // Header with back button
+          // Padding(
+          //   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          //   child: Row(
+          //     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          //     children: [
+          //       // Back button
+          //       InkWell(
+          //         onTap: _goBack,
+          //         child: Container(
+          //           width: 40,
+          //           height: 40,
+          //           decoration: BoxDecoration(
+          //             color: Theme.of(context).colorScheme.surface,
+          //             borderRadius: BorderRadius.circular(20),
+          //             border: Border.all(color: Theme.of(context).colorScheme.outline.withAlpha(50)),
+          //           ),
+          //           alignment: Alignment.center,
+          //           child: const Text('◀️', style: TextStyle(fontSize: 22)),
+          //         ),
+          //       ),
 
-                // Header text
-                Text('Parking', style: Theme.of(context).textTheme.headlineSmall),
+          //       // Header text
+          //       Text('Parking', style: Theme.of(context).textTheme.headlineSmall),
 
-                // Empty space with same width as back button for balance
-                const SizedBox(width: 40),
-              ],
-            ),
-          ),
+          //       // Empty space with same width as back button for balance
+          //       const SizedBox(width: 40),
+          //     ],
+          //   ),
+          // ),
 
           // Reduced spacing after header
           const SizedBox(height: 16),

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_parking/data/models/parking_space/parking_space_model.dart';
 
 abstract class ParkingSpaceRemoteDataSource {
+  Future<ParkingSpaceModel> createParkingSpace(ParkingSpaceModel space);
   Future<List<ParkingSpaceModel>> getAllParkingSpaces();
   Future<List<ParkingSpaceModel>> getParkingSpacesByStatus(String status);
   Future<List<ParkingSpaceModel>> getParkingSpacesBySection(String section);
@@ -11,6 +12,7 @@ abstract class ParkingSpaceRemoteDataSource {
   Future<ParkingSpaceModel> getParkingSpaceById(String spaceId);
   Future<ParkingSpaceModel> getParkingSpaceByNumber(String spaceNumber);
   Future<ParkingSpaceModel> updateParkingSpace(ParkingSpaceModel space);
+  Future<void> deleteParkingSpace(String spaceId);
   Future<ParkingSpaceModel> occupyParkingSpace(String spaceId, String vehicleId);
   Future<ParkingSpaceModel> vacateParkingSpace(String spaceId);
   Stream<List<ParkingSpaceModel>> watchParkingSpaces();
@@ -25,6 +27,34 @@ class ParkingSpaceRemoteDataSourceImpl implements ParkingSpaceRemoteDataSource {
 
   // Collection reference
   CollectionReference get _spacesCollection => firestore.collection('parking_spaces');
+
+  @override
+  Future<ParkingSpaceModel> createParkingSpace(ParkingSpaceModel space) async {
+    try {
+      print("ParkingSpaceDataSource: Creating new parking space");
+
+      // Convert the model to Firestore data
+      final data = space.toFirestore();
+
+      // Create a new document with auto-generated ID if none provided
+      DocumentReference docRef;
+      if (space.id != null && space.id!.isNotEmpty) {
+        docRef = _spacesCollection.doc(space.id);
+        await docRef.set(data);
+      } else {
+        docRef = await _spacesCollection.add(data);
+      }
+
+      // Get the new space with the ID
+      final newSpace = await getParkingSpaceById(docRef.id);
+
+      print("ParkingSpaceDataSource: Created new parking space with ID: ${docRef.id}");
+      return newSpace;
+    } catch (e) {
+      print("ParkingSpaceDataSource: Error creating parking space: $e");
+      throw Exception('Failed to create parking space: $e');
+    }
+  }
 
   @override
   Future<List<ParkingSpaceModel>> getAllParkingSpaces() async {
@@ -159,6 +189,27 @@ class ParkingSpaceRemoteDataSourceImpl implements ParkingSpaceRemoteDataSource {
     } catch (e) {
       print("ParkingSpaceDataSource: Error updating space: $e");
       throw Exception('Failed to update parking space: $e');
+    }
+  }
+
+  @override
+  Future<void> deleteParkingSpace(String spaceId) async {
+    try {
+      print("ParkingSpaceDataSource: Deleting parking space with ID: $spaceId");
+
+      // Check if space exists before deleting
+      final docSnapshot = await _spacesCollection.doc(spaceId).get();
+      if (!docSnapshot.exists) {
+        throw Exception('Parking space not found');
+      }
+
+      // Delete the document
+      await _spacesCollection.doc(spaceId).delete();
+
+      print("ParkingSpaceDataSource: Successfully deleted parking space: $spaceId");
+    } catch (e) {
+      print("ParkingSpaceDataSource: Error deleting parking space: $e");
+      throw Exception('Failed to delete parking space: $e');
     }
   }
 

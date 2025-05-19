@@ -13,6 +13,23 @@ class ParkingSpaceRepositoryImpl implements ParkingSpaceRepository {
   ParkingSpaceRepositoryImpl({required this.remoteDataSource});
 
   @override
+  Future<Either<Failure, ParkingSpaceEntity>> createParkingSpace(ParkingSpaceEntity space) async {
+    try {
+      // Convert entity to model
+      final spaceModel = ParkingSpaceModel.fromEntity(space);
+
+      // Create space
+      final result = await remoteDataSource.createParkingSpace(spaceModel);
+
+      // Convert back to entity
+      return Right(result.toEntity());
+    } catch (e) {
+      print("ParkingSpaceRepository: Error creating space: $e");
+      return Left(ParkingSpaceFailure('create-failed', 'Failed to create parking space: ${e.toString()}'));
+    }
+  }
+
+  @override
   Future<Either<Failure, List<ParkingSpaceEntity>>> getAllParkingSpaces() async {
     try {
       final spaceModels = await remoteDataSource.getAllParkingSpaces();
@@ -96,6 +113,17 @@ class ParkingSpaceRepositoryImpl implements ParkingSpaceRepository {
     } catch (e) {
       print("ParkingSpaceRepository: Error updating space: $e");
       return Left(ParkingSpaceFailure('update-failed', 'Failed to update parking space: ${e.toString()}'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> deleteParkingSpace(String spaceId) async {
+    try {
+      await remoteDataSource.deleteParkingSpace(spaceId);
+      return const Right(null);
+    } catch (e) {
+      print("ParkingSpaceRepository: Error deleting space: $e");
+      return Left(ParkingSpaceFailure('delete-failed', 'Failed to delete parking space: ${e.toString()}'));
     }
   }
 

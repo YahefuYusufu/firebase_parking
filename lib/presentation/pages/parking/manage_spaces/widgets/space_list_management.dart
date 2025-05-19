@@ -1,10 +1,10 @@
-import 'package:firebase_parking/data/models/parking_space/parking_space.dart';
+import 'package:firebase_parking/domain/entities/parking_space_entity.dart';
 import 'package:flutter/material.dart';
 
 class SpaceListManagement extends StatefulWidget {
-  final List<ParkingSpace> spaces;
-  final Function(ParkingSpace) onEditSpace;
-  final Function(ParkingSpace) onDeleteSpace;
+  final List<ParkingSpaceEntity> spaces;
+  final Function(ParkingSpaceEntity) onEditSpace;
+  final Function(ParkingSpaceEntity) onDeleteSpace;
   final bool isLoading;
   // Add custom loading builder parameter
   final Widget Function()? loadingBuilder;
@@ -22,7 +22,7 @@ class _SpaceListManagementState extends State<SpaceListManagement> {
   String? filterStatus;
   String searchQuery = '';
 
-  List<ParkingSpace> get filteredSpaces {
+  List<ParkingSpaceEntity> get filteredSpaces {
     return widget.spaces.where((space) {
       // Apply search query
       if (searchQuery.isNotEmpty && !space.spaceNumber.toLowerCase().contains(searchQuery.toLowerCase())) {
@@ -40,12 +40,12 @@ class _SpaceListManagementState extends State<SpaceListManagement> {
       }
 
       // Apply type filter
-      if (filterType != null && space.type.toLowerCase() != filterType!.toLowerCase()) {
+      if (filterType != null && space.type.name.toLowerCase() != filterType!.toLowerCase()) {
         return false;
       }
 
       // Apply status filter
-      if (filterStatus != null && space.status.toLowerCase() != filterStatus!.toLowerCase()) {
+      if (filterStatus != null && space.status.name.toLowerCase() != filterStatus!.toLowerCase()) {
         return false;
       }
 
@@ -309,9 +309,9 @@ class _SpaceListManagementState extends State<SpaceListManagement> {
                       const SizedBox(width: 12),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(color: space.status.toLowerCase() == 'vacant' ? Colors.green : Colors.red, borderRadius: BorderRadius.circular(4)),
+                        decoration: BoxDecoration(color: space.status == ParkingSpaceStatus.vacant ? Colors.green : Colors.red, borderRadius: BorderRadius.circular(4)),
                         child: Text(
-                          space.status.toLowerCase() == 'vacant' ? 'Available' : 'Occupied',
+                          space.status == ParkingSpaceStatus.vacant ? 'Available' : 'Occupied',
                           style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       ),
@@ -356,14 +356,16 @@ class _SpaceListManagementState extends State<SpaceListManagement> {
   }
 
   // Using emojis instead of Material icons
-  String _getTypeEmoji(String type) {
-    switch (type.toLowerCase()) {
-      case 'handicapped':
+  String _getTypeEmoji(ParkingSpaceType type) {
+    switch (type) {
+      case ParkingSpaceType.handicapped:
         return '♿';
-      case 'compact':
+      case ParkingSpaceType.compact:
         return '🚗';
-      case 'electric':
+      case ParkingSpaceType.electric:
         return '🔌';
+      case ParkingSpaceType.vip:
+        return '👑';
       default:
         return 'P';
     }

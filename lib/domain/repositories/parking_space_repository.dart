@@ -3,6 +3,9 @@ import '../../core/errors/failures.dart';
 import '../entities/parking_space_entity.dart';
 
 abstract class ParkingSpaceRepository {
+  // Create a new parking space
+  Future<Either<Failure, ParkingSpaceEntity>> createParkingSpace(ParkingSpaceEntity space);
+
   // Get all parking spaces
   Future<Either<Failure, List<ParkingSpaceEntity>>> getAllParkingSpaces();
 
@@ -23,6 +26,9 @@ abstract class ParkingSpaceRepository {
 
   // Update parking space (for admin)
   Future<Either<Failure, ParkingSpaceEntity>> updateParkingSpace(ParkingSpaceEntity space);
+
+  // Delete a parking space
+  Future<Either<Failure, void>> deleteParkingSpace(String spaceId);
 
   // Occupy a parking space
   Future<Either<Failure, ParkingSpaceEntity>> occupyParkingSpace(String spaceId, String vehicleId);
