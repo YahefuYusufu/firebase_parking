@@ -1,6 +1,10 @@
-import 'package:firebase_parking/config/theme/park_os_colors.dart';
-import 'package:firebase_parking/data/models/parking_space/parking_space.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:firebase_parking/config/theme/park_os_colors.dart';
+import 'package:firebase_parking/domain/entities/parking_space_entity.dart';
+import 'package:firebase_parking/presentation/blocs/parking_space/parking_space_bloc.dart';
+import 'package:firebase_parking/presentation/blocs/parking_space/parking_space_event.dart';
+import 'package:firebase_parking/presentation/blocs/parking_space/parking_space_state.dart';
 import 'widgets/space_creation_form.dart';
 import 'widgets/space_edit_form.dart';
 import 'widgets/space_list_management.dart';
@@ -13,8 +17,6 @@ class ManageSpacesTab extends StatefulWidget {
 }
 
 class _ManageSpacesTabState extends State<ManageSpacesTab> with SingleTickerProviderStateMixin {
-  List<ParkingSpace> managedSpaces = [];
-  bool isLoading = true; // Start with loading state
   AnimationController? _shimmerController; // Shimmer animation controller
 
   @override
@@ -24,7 +26,10 @@ class _ManageSpacesTabState extends State<ManageSpacesTab> with SingleTickerProv
     // Initialize shimmer animation controller
     _shimmerController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat(reverse: true);
 
-    _loadParkingSpaces();
+    // Load parking spaces when screen initializes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ParkingSpaceBloc>().add(GetAllParkingSpacesEvent());
+    });
   }
 
   @override
@@ -33,87 +38,34 @@ class _ManageSpacesTabState extends State<ManageSpacesTab> with SingleTickerProv
     super.dispose();
   }
 
-  // Load parking spaces from your backend
-  Future<void> _loadParkingSpaces() async {
-    if (!mounted) return;
-
-    setState(() {
-      isLoading = true;
-    });
-
-    try {
-      // For now, use sample data
-      await Future.delayed(const Duration(milliseconds: 1500)); // Simulate network delay
-      final sampleSpaces = [
-        ParkingSpace(id: '1', spaceNumber: 'A101', type: 'regular', status: 'vacant', level: '1', section: 'A', hourlyRate: 2.50),
-        ParkingSpace(id: '2', spaceNumber: 'B205', type: 'handicapped', status: 'vacant', level: '2', section: 'B', hourlyRate: 2.00),
-        ParkingSpace(id: '3', spaceNumber: 'C103', type: 'electric', status: 'vacant', level: '1', section: 'C', hourlyRate: 3.00),
-        ParkingSpace(id: '4', spaceNumber: 'A203', type: 'compact', status: 'vacant', level: '2', section: 'A', hourlyRate: 2.25),
-      ];
-
-      if (!mounted) return;
-
-      setState(() {
-        managedSpaces = sampleSpaces;
-        isLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        isLoading = false;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load parking spaces: ${e.toString()}'), backgroundColor: Colors.red));
-      }
-    }
-  }
-
   void _navigateToCreateSpaceForm() async {
     if (!mounted) return;
 
-    final result = await Navigator.of(context).push(MaterialPageRoute(builder: (context) => SpaceCreationForm(onSpaceCreated: _handleSpaceCreated)));
+    // Pass the bloc to the form screen
+    final result = await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => BlocProvider.value(value: BlocProvider.of<ParkingSpaceBloc>(context), child: const SpaceCreationForm())));
 
-    if (result != null && mounted) {
-      // Space was created, refresh the list
-      _loadParkingSpaces();
+    if (result == true && mounted) {
+      // Refresh the list
+      context.read<ParkingSpaceBloc>().add(GetAllParkingSpacesEvent());
     }
   }
 
-  void _handleSpaceCreated(ParkingSpace newSpace) async {
+  void _navigateToEditSpaceForm(ParkingSpaceEntity space) async {
     if (!mounted) return;
 
-    setState(() {
-      managedSpaces.add(newSpace);
-    });
-    Navigator.of(context).pop(newSpace);
-  }
+    final result = await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => BlocProvider.value(value: BlocProvider.of<ParkingSpaceBloc>(context), child: SpaceEditForm(space: space))));
 
-  void _navigateToEditSpaceForm(ParkingSpace space) async {
-    if (!mounted) return;
-
-    final result = await Navigator.of(context).push(MaterialPageRoute(builder: (context) => SpaceEditForm(space: space, onSpaceUpdated: _handleSpaceUpdated)));
-
-    if (result != null && mounted) {
-      // Space was updated, refresh the list
-      _loadParkingSpaces();
+    if (result == true && mounted) {
+      // Refresh the list
+      context.read<ParkingSpaceBloc>().add(GetAllParkingSpacesEvent());
     }
   }
 
-  void _handleSpaceUpdated(ParkingSpace updatedSpace) async {
-    if (!mounted) return;
-
-    setState(() {
-      final index = managedSpaces.indexWhere((space) => space.id == updatedSpace.id);
-      if (index != -1) {
-        managedSpaces[index] = updatedSpace;
-      }
-    });
-    Navigator.of(context).pop(updatedSpace);
-  }
-
-  void _showDeleteConfirmation(ParkingSpace space) {
+  void _showDeleteConfirmation(ParkingSpaceEntity space) {
     if (!mounted) return;
 
     showDialog(
@@ -127,7 +79,9 @@ class _ManageSpacesTabState extends State<ManageSpacesTab> with SingleTickerProv
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  _deleteSpace(space);
+                  if (space.id != null) {
+                    context.read<ParkingSpaceBloc>().add(DeleteParkingSpaceEvent(space.id!));
+                  }
                 },
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
                 child: const Text('DELETE'),
@@ -137,86 +91,109 @@ class _ManageSpacesTabState extends State<ManageSpacesTab> with SingleTickerProv
     );
   }
 
-  void _deleteSpace(ParkingSpace space) async {
-    try {
-      if (!mounted) return;
-
-      setState(() {
-        isLoading = true;
-      });
-
-      await Future.delayed(const Duration(milliseconds: 1000));
-
-      if (!mounted) return;
-
-      setState(() {
-        managedSpaces.removeWhere((s) => s.id == space.id);
-        isLoading = false;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Space ${space.spaceNumber} deleted successfully')));
-      }
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        isLoading = false;
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete space: ${e.toString()}'), backgroundColor: Colors.red));
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Title with added top padding
-          Padding(
-            padding: const EdgeInsets.only(top: 20.0),
-            child: Row(
-              children: [
-                Container(width: 32, height: 32, alignment: Alignment.center, child: const Text('🅿️', style: TextStyle(fontSize: 20))),
-                const SizedBox(width: 8),
-                Text('Manage Parking Spaces', style: Theme.of(context).textTheme.titleLarge),
-              ],
+    return BlocConsumer<ParkingSpaceBloc, ParkingSpaceState>(
+      listener: (context, state) {
+        // Show snackbar for success/error messages
+        if (state is ParkingSpaceError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.message),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
+          );
+        } else if (state is ParkingSpaceCreated) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Parking space created successfully'),
+              backgroundColor: ParkOSColors.mediumGreen,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          );
+        } else if (state is ParkingSpaceUpdated) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Parking space updated successfully'),
+              backgroundColor: ParkOSColors.mediumGreen,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          );
+        } else if (state is ParkingSpaceDeleted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Parking space deleted successfully'),
+              backgroundColor: ParkOSColors.mediumGreen,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          );
+        }
+      },
+      builder: (context, state) {
+        // Determine if we're in a loading state
+        final bool isLoading = state is ParkingSpacesLoading || state is ParkingSpaceCreating || state is ParkingSpaceUpdating || state is ParkingSpaceDeleting;
+
+        // Get the list of spaces if available, otherwise empty list
+        List<ParkingSpaceEntity> spaces = [];
+
+        if (state is ParkingSpacesLoaded) {
+          spaces = state.spaces;
+        }
+
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title with added top padding
+              Padding(
+                padding: const EdgeInsets.only(top: 20.0),
+                child: Row(
+                  children: [
+                    Container(width: 32, height: 32, alignment: Alignment.center, child: const Text('🅿️', style: TextStyle(fontSize: 20))),
+                    const SizedBox(width: 8),
+                    Text('Manage Parking Spaces', style: Theme.of(context).textTheme.titleLarge),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Always show the Add Space button
+              ElevatedButton(
+                onPressed: _navigateToCreateSpaceForm,
+                child: Row(mainAxisSize: MainAxisSize.min, children: const [Text('➕', style: TextStyle(fontSize: 18)), SizedBox(width: 8), Text('Add Space')]),
+              ),
+
+              const SizedBox(height: 16),
+
+              // If spaces are empty and not loading, show empty state
+              // Otherwise, use the SpaceListManagement widget
+              Expanded(
+                child:
+                    spaces.isEmpty && !isLoading
+                        ? _buildEmptyState()
+                        : SpaceListManagement(
+                          spaces: spaces,
+                          onEditSpace: _navigateToEditSpaceForm,
+                          onDeleteSpace: _showDeleteConfirmation,
+                          isLoading: isLoading,
+                          loadingBuilder: _buildLoadingAnimation,
+                        ),
+              ),
+            ],
           ),
-
-          const SizedBox(height: 16),
-
-          // Always show the Add Space button
-          ElevatedButton(
-            onPressed: _navigateToCreateSpaceForm,
-            child: Row(mainAxisSize: MainAxisSize.min, children: const [Text('➕', style: TextStyle(fontSize: 18)), SizedBox(width: 8), Text('Add Space')]),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Always show SpaceListManagement with our custom loading state
-          // This keeps filters visible while showing loading animation for just the list
-          Expanded(
-            child:
-                managedSpaces.isEmpty && !isLoading
-                    ? _buildEmptyState()
-                    : SpaceListManagement(
-                      spaces: managedSpaces,
-                      onEditSpace: _navigateToEditSpaceForm,
-                      onDeleteSpace: _showDeleteConfirmation,
-                      // Pass our loading state, but let SpaceListManagement handle it
-                      isLoading: isLoading,
-                      // Custom loading builder to replace default CircularProgressIndicator
-                      loadingBuilder: _buildLoadingAnimation,
-                    ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
