@@ -1,4 +1,5 @@
 import 'package:firebase_parking/core/usecase/usecase.dart';
+import 'package:firebase_parking/domain/entities/parking_space_entity.dart';
 import 'package:firebase_parking/domain/usecases/parking_space/create_parking_space.dart';
 import 'package:firebase_parking/domain/usecases/parking_space/delete_parking_space.dart';
 import 'package:firebase_parking/domain/usecases/parking_space/get_all_parking_spaces.dart';
@@ -65,6 +66,8 @@ class ParkingSpaceBloc extends Bloc<ParkingSpaceEvent, ParkingSpaceState> {
        _watchParkingSpaces = watchParkingSpaces,
        super(const ParkingSpaceInitial()) {
     on<GetAllParkingSpacesEvent>(_onGetAllParkingSpaces);
+    on<GetAvailableParkingSpacesEvent>(_onGetAvailableParkingSpaces);
+    on<GetFilteredParkingSpacesEvent>(_onGetFilteredParkingSpaces);
     on<GetParkingSpacesByStatusEvent>(_onGetParkingSpacesByStatus);
     on<GetParkingSpacesBySectionEvent>(_onGetParkingSpacesBySection);
     on<GetParkingSpacesByLevelEvent>(_onGetParkingSpacesByLevel);
@@ -94,6 +97,36 @@ class ParkingSpaceBloc extends Bloc<ParkingSpaceEvent, ParkingSpaceState> {
     final result = await _getParkingSpacesByStatus(GetParkingSpacesByStatusParams(status: event.status));
 
     result.fold((failure) => emit(ParkingSpaceError(failure.message)), (spaces) => emit(ParkingSpacesLoaded(spaces)));
+  }
+
+  Future<void> _onGetAvailableParkingSpaces(GetAvailableParkingSpacesEvent event, Emitter<ParkingSpaceState> emit) async {
+    emit(const ParkingSpacesLoading());
+
+    // Use your existing method to get spaces by status, passing 'vacant'
+    final result = await _getParkingSpacesByStatus(GetParkingSpacesByStatusParams(status: ParkingSpaceStatus.vacant));
+
+    result.fold((failure) => emit(ParkingSpaceError(failure.message)), (spaces) => emit(ParkingSpacesLoaded(spaces)));
+  }
+
+  Future<void> _onGetFilteredParkingSpaces(GetFilteredParkingSpacesEvent event, Emitter<ParkingSpaceState> emit) async {
+    emit(const ParkingSpacesLoading());
+
+    // First get spaces by status (vacant)
+    final result = await _getParkingSpacesByStatus(GetParkingSpacesByStatusParams(status: ParkingSpaceStatus.vacant));
+
+    return result.fold((failure) => emit(ParkingSpaceError(failure.message)), (spaces) {
+      // Apply additional filters
+      final filteredSpaces =
+          spaces.where((space) {
+            bool matchesSection = event.section == null || space.section == event.section;
+            bool matchesLevel = event.level == null || space.level == event.level;
+            bool matchesType = event.type == null || space.type.name.toLowerCase() == event.type;
+
+            return matchesSection && matchesLevel && matchesType;
+          }).toList();
+
+      emit(ParkingSpacesLoaded(filteredSpaces));
+    });
   }
 
   Future<void> _onGetParkingSpacesBySection(GetParkingSpacesBySectionEvent event, Emitter<ParkingSpaceState> emit) async {

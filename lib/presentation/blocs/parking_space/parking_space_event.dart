@@ -19,6 +19,23 @@ class GetParkingSpacesByStatusEvent extends ParkingSpaceEvent {
   List<Object?> get props => [status];
 }
 
+/// Event to get all available (vacant) parking spaces
+class GetAvailableParkingSpacesEvent extends ParkingSpaceEvent {
+  const GetAvailableParkingSpacesEvent();
+}
+
+/// Event to get filtered parking spaces
+class GetFilteredParkingSpacesEvent extends ParkingSpaceEvent {
+  final String? section;
+  final String? level;
+  final String? type;
+
+  const GetFilteredParkingSpacesEvent({this.section, this.level, this.type});
+
+  @override
+  List<Object?> get props => [section, level, type];
+}
+
 class GetParkingSpacesBySectionEvent extends ParkingSpaceEvent {
   final String section;
 

@@ -1,8 +1,7 @@
+// lib/data/datasources/parking_data_source.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_parking/data/models/parking/parking_model.dart';
-import 'package:firebase_parking/data/models/parking_space/parking_space.dart';
 import 'package:firebase_parking/data/models/parking_space/parking_space_model.dart';
-import 'package:firebase_parking/data/models/vehicles/vehicle.dart';
 import 'package:firebase_parking/data/models/vehicles/vehicle_model.dart';
 
 abstract class ParkingDataSource {
@@ -54,7 +53,7 @@ class FirebaseParkingDataSource implements ParkingDataSource {
     final parkingSpace = ParkingSpaceModel.fromFirestore(spaceDoc.data() as Map<String, dynamic>, spaceDoc.id);
 
     // Create and return the parking model
-    return ParkingModel.fromFirestore(data, doc.id, vehicle as Vehicle, parkingSpace as ParkingSpace);
+    return ParkingModel.fromFirestore(data, doc.id, vehicle, parkingSpace);
   }
 
   @override
@@ -75,7 +74,7 @@ class FirebaseParkingDataSource implements ParkingDataSource {
       final parkingSpace = ParkingSpaceModel.fromFirestore(spaceDoc.data() as Map<String, dynamic>, spaceDoc.id);
 
       // Create and add the parking model
-      parkingList.add(ParkingModel.fromFirestore(data, doc.id, vehicle as Vehicle, parkingSpace as ParkingSpace));
+      parkingList.add(ParkingModel.fromFirestore(data, doc.id, vehicle, parkingSpace));
     }
 
     return parkingList;
@@ -109,7 +108,7 @@ class FirebaseParkingDataSource implements ParkingDataSource {
       final parkingSpace = ParkingSpaceModel.fromFirestore(spaceDoc.data() as Map<String, dynamic>, spaceDoc.id);
 
       // Create and add the parking model
-      parkingList.add(ParkingModel.fromFirestore(data, doc.id, vehicle as Vehicle, parkingSpace as ParkingSpace));
+      parkingList.add(ParkingModel.fromFirestore(data, doc.id, vehicle, parkingSpace));
     }
 
     return parkingList;

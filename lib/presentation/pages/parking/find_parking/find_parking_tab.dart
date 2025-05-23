@@ -1,6 +1,11 @@
+// lib/presentation/pages/find_parking_tab.dart
 import 'package:firebase_parking/config/theme/park_os_colors.dart';
-import 'package:firebase_parking/data/models/parking_space/parking_space.dart';
+import 'package:firebase_parking/domain/entities/parking_space_entity.dart';
+import 'package:firebase_parking/presentation/blocs/parking_space/parking_space_bloc.dart';
+import 'package:firebase_parking/presentation/blocs/parking_space/parking_space_event.dart';
+import 'package:firebase_parking/presentation/blocs/parking_space/parking_space_state.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'widgets/space_filter_widget.dart';
 import 'widgets/space_list_widget.dart';
 import 'widgets/booking_form_widget.dart';
@@ -16,17 +21,8 @@ class _FindParkingTabState extends State<FindParkingTab> with SingleTickerProvid
   String? filterSection;
   String? filterLevel;
   String? filterType;
-  bool isLoading = true; // Start with loading state
-  AnimationController? _shimmerController; // Make nullable to avoid late initialization error
-
-  List<ParkingSpace> allSpaces = [
-    ParkingSpace(id: '1', spaceNumber: 'A101', type: 'regular', status: 'vacant', level: '1', section: 'A', hourlyRate: 2.50),
-    ParkingSpace(id: '2', spaceNumber: 'B205', type: 'handicapped', status: 'vacant', level: '2', section: 'B', hourlyRate: 2.00),
-    ParkingSpace(id: '3', spaceNumber: 'C103', type: 'electric', status: 'vacant', level: '1', section: 'C', hourlyRate: 3.00),
-    ParkingSpace(id: '4', spaceNumber: 'A203', type: 'compact', status: 'vacant', level: '2', section: 'A', hourlyRate: 2.25),
-  ];
-
-  List<ParkingSpace> filteredSpaces = [];
+  bool isLoading = true;
+  AnimationController? _shimmerController;
 
   @override
   void initState() {
@@ -35,30 +31,17 @@ class _FindParkingTabState extends State<FindParkingTab> with SingleTickerProvid
     // Initialize the shimmer animation controller
     _shimmerController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat(reverse: true);
 
-    // Simulate loading data
+    // Load parking spaces
     _loadSpaces();
   }
 
-  // Simulate loading data with a delay
-  void _loadSpaces() async {
-    setState(() {
-      isLoading = true;
-    });
-
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 2));
-
-    if (mounted) {
-      setState(() {
-        filteredSpaces = allSpaces;
-        isLoading = false;
-      });
-    }
+  void _loadSpaces() {
+    context.read<ParkingSpaceBloc>().add(GetAvailableParkingSpacesEvent());
   }
 
   @override
   void dispose() {
-    _shimmerController?.dispose(); // Use safe call in case it wasn't initialized
+    _shimmerController?.dispose();
     super.dispose();
   }
 
@@ -72,48 +55,17 @@ class _FindParkingTabState extends State<FindParkingTab> with SingleTickerProvid
       filterType = type?.toLowerCase();
     });
 
-    // Simulate filter processing delay
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        setState(() {
-          filteredSpaces =
-              allSpaces.where((space) {
-                bool matchesSection = filterSection == null || space.section == filterSection;
-                bool matchesLevel = filterLevel == null || space.level == filterLevel;
-                bool matchesType = filterType == null || space.type.toLowerCase() == filterType;
-
-                return matchesSection && matchesLevel && matchesType && space.status.toLowerCase() == 'vacant';
-              }).toList();
-
-          isLoading = false;
-        });
-      }
-    });
+    // Add filter event to BLoC
+    context.read<ParkingSpaceBloc>().add(GetFilteredParkingSpacesEvent(section: section, level: level, type: type?.toLowerCase()));
   }
 
-  void _handleSpaceSelected(ParkingSpace space) async {
+  void _handleSpaceSelected(ParkingSpaceEntity space) async {
     if (!mounted) return;
 
     final result = await Navigator.of(context).push(MaterialPageRoute(builder: (context) => BookingFormWidget(space: space)));
 
     if (result == true && mounted) {
-      setState(() {
-        final index = allSpaces.indexWhere((s) => s.id == space.id);
-        if (index != -1) {
-          final updatedSpace = ParkingSpace(
-            id: space.id,
-            spaceNumber: space.spaceNumber,
-            type: space.type,
-            status: 'occupied',
-            level: space.level,
-            section: space.section,
-            hourlyRate: space.hourlyRate,
-          );
-
-          allSpaces[index] = updatedSpace;
-          _applyFilters(filterSection, filterLevel, filterType);
-        }
-      });
+      _loadSpaces();
     }
   }
 
@@ -146,8 +98,33 @@ class _FindParkingTabState extends State<FindParkingTab> with SingleTickerProvid
           // Filter widget with tight bottom margin
           Container(margin: const EdgeInsets.only(bottom: 0), child: SpaceFilterWidget(onFilterChanged: _applyFilters)),
 
-          // Space list with loading animation
-          Expanded(child: isLoading ? _buildLoadingAnimation() : SpaceListWidget(spaces: filteredSpaces, onSpaceSelected: _handleSpaceSelected, isLoading: false)),
+          // Space list with BLoC integration
+          Expanded(
+            child: BlocBuilder<ParkingSpaceBloc, ParkingSpaceState>(
+              builder: (context, state) {
+                if (state is ParkingSpacesLoading) {
+                  return _buildLoadingAnimation();
+                } else if (state is ParkingSpacesLoaded) {
+                  return SpaceListWidget(spaces: state.spaces, onSpaceSelected: _handleSpaceSelected, isLoading: false);
+                } else if (state is ParkingSpaceError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text('Error: ${state.message}'),
+                        const SizedBox(height: 16),
+                        ElevatedButton(onPressed: _loadSpaces, child: const Text('Try Again')),
+                      ],
+                    ),
+                  );
+                } else {
+                  return _buildLoadingAnimation();
+                }
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -179,7 +156,7 @@ class _FindParkingTabState extends State<FindParkingTab> with SingleTickerProvid
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: baseColor, // Will use lightSurface in light mode
+      color: baseColor,
       child: Container(
         height: 120,
         padding: const EdgeInsets.all(16),
@@ -209,14 +186,7 @@ class _FindParkingTabState extends State<FindParkingTab> with SingleTickerProvid
               children: [
                 Container(height: 14, width: 80, decoration: BoxDecoration(color: elementColor, borderRadius: BorderRadius.circular(4))),
                 const Spacer(),
-                Container(
-                  height: 24,
-                  width: 70,
-                  decoration: BoxDecoration(
-                    color: accentColor, // Keep using darkGreen for the button
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+                Container(height: 24, width: 70, decoration: BoxDecoration(color: accentColor, borderRadius: BorderRadius.circular(12))),
               ],
             ),
           ],

@@ -1,12 +1,12 @@
 // lib/data/models/parking/parking_model.dart
-import 'package:firebase_parking/data/models/parking_space/parking_space.dart';
-import 'package:firebase_parking/data/models/vehicles/vehicle.dart';
+import 'package:firebase_parking/data/models/parking_space/parking_space_model.dart';
+import 'package:firebase_parking/data/models/vehicles/vehicle_model.dart';
 import 'package:firebase_parking/domain/entities/parking_entity.dart';
 
 class ParkingModel {
   final String? id;
-  final Vehicle vehicle;
-  final ParkingSpace parkingSpace;
+  final VehicleModel vehicle;
+  final ParkingSpaceModel parkingSpace;
   final DateTime startedAt;
   final DateTime? finishedAt;
 
@@ -47,7 +47,7 @@ class ParkingModel {
   }
 
   // Create from domain entity (simplified version, actual implementation may need more data)
-  factory ParkingModel.fromEntity(ParkingEntity entity, Vehicle vehicle, ParkingSpace parkingSpace) {
+  factory ParkingModel.fromEntity(ParkingEntity entity, VehicleModel vehicle, ParkingSpaceModel parkingSpace) {
     return ParkingModel(id: entity.id, vehicle: vehicle, parkingSpace: parkingSpace, startedAt: entity.startedAt, finishedAt: entity.finishedAt);
   }
 
@@ -72,15 +72,15 @@ class ParkingModel {
   factory ParkingModel.fromJson(Map<String, dynamic> json) {
     return ParkingModel(
       id: json['id'],
-      vehicle: Vehicle.fromJson(json['vehicle']),
-      parkingSpace: ParkingSpace.fromJson(json['parking_space']),
+      vehicle: VehicleModel.fromJson(json['vehicle']),
+      parkingSpace: ParkingSpaceModel.fromJson(json['parking_space']),
       startedAt: DateTime.parse(json['started_at']),
       finishedAt: json['finished_at'] != null ? DateTime.parse(json['finished_at']) : null,
     );
   }
 
-  // Create from Firestore document (simplified, actual implementation would need to fetch vehicle and parking space separately)
-  factory ParkingModel.fromFirestore(Map<String, dynamic> json, String documentId, Vehicle vehicle, ParkingSpace parkingSpace) {
+  // Create from Firestore document
+  factory ParkingModel.fromFirestore(Map<String, dynamic> json, String documentId, VehicleModel vehicle, ParkingSpaceModel parkingSpace) {
     return ParkingModel(
       id: documentId,
       vehicle: vehicle,
@@ -91,7 +91,7 @@ class ParkingModel {
   }
 
   // Copy with method
-  ParkingModel copyWith({String? id, Vehicle? vehicle, ParkingSpace? parkingSpace, DateTime? startedAt, DateTime? finishedAt}) {
+  ParkingModel copyWith({String? id, VehicleModel? vehicle, ParkingSpaceModel? parkingSpace, DateTime? startedAt, DateTime? finishedAt}) {
     return ParkingModel(
       id: id ?? this.id,
       vehicle: vehicle ?? this.vehicle,

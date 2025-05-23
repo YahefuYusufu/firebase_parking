@@ -4,14 +4,22 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_parking/config/theme/app_theme.dart';
 import 'package:firebase_parking/config/theme/theme_provider.dart';
 import 'package:firebase_parking/data/datasources/auth_remote_datasource.dart';
+import 'package:firebase_parking/data/datasources/parking_data_source.dart';
 import 'package:firebase_parking/data/datasources/parking_space_remote_datasource.dart';
 import 'package:firebase_parking/data/datasources/vehicle_remote_datasource.dart';
 import 'package:firebase_parking/data/repository/auth_repository_impl.dart';
+import 'package:firebase_parking/data/repository/parking_repository_impl.dart';
 import 'package:firebase_parking/data/repository/parking_space_repository_impl.dart';
 import 'package:firebase_parking/data/repository/vehicle_repository_impl.dart';
 import 'package:firebase_parking/domain/repositories/auth_repository.dart';
+import 'package:firebase_parking/domain/repositories/parking_repository.dart';
 import 'package:firebase_parking/domain/repositories/parking_space_repository.dart';
 import 'package:firebase_parking/domain/repositories/vehicle_repository.dart';
+import 'package:firebase_parking/domain/usecases/parking/create_parking_usecase.dart';
+import 'package:firebase_parking/domain/usecases/parking/end_parking_usecase.dart';
+import 'package:firebase_parking/domain/usecases/parking/get_active_parking_usecase.dart';
+import 'package:firebase_parking/domain/usecases/parking/get_parking_usecase.dart';
+import 'package:firebase_parking/domain/usecases/parking/get_user_parking_usecase.dart';
 import 'package:firebase_parking/domain/usecases/parking_space/create_parking_space.dart';
 import 'package:firebase_parking/domain/usecases/parking_space/delete_parking_space.dart';
 import 'package:firebase_parking/domain/usecases/parking_space/get_all_parking_spaces.dart';
@@ -37,6 +45,7 @@ import 'package:firebase_parking/firebase_options.dart';
 import 'package:firebase_parking/presentation/blocs/auth/auth_bloc.dart' as auth_bloc;
 import 'package:firebase_parking/presentation/blocs/auth/auth_event.dart';
 import 'package:firebase_parking/presentation/blocs/auth/auth_state.dart';
+import 'package:firebase_parking/presentation/blocs/parking/parking_bloc.dart';
 import 'package:firebase_parking/presentation/blocs/parking_space/parking_space_bloc.dart';
 import 'package:firebase_parking/presentation/blocs/vehicle/vehicle_bloc.dart';
 import 'package:firebase_parking/presentation/pages/auth/complete_profile_screen.dart';
@@ -89,6 +98,8 @@ void main() async {
         BlocProvider<VehicleBloc>(create: (context) => sl<VehicleBloc>()),
         // Add ParkingSpaceBloc provider
         BlocProvider<ParkingSpaceBloc>(create: (context) => sl<ParkingSpaceBloc>()),
+        // Add ParkingBloc provider - THIS WAS MISSING!
+        BlocProvider<ParkingBloc>(create: (context) => sl<ParkingBloc>()),
       ],
       child: const MyApp(),
     ),
@@ -146,10 +157,12 @@ void setupServiceLocator() {
   // Register repositories
   sl.registerLazySingleton<AuthRepository>(() => AuthRepositoryImpl(remoteDataSource: sl()));
   sl.registerLazySingleton<VehicleRepository>(() => VehicleRepositoryImpl(remoteDataSource: sl()));
+  sl.registerLazySingleton<ParkingRepository>(() => ParkingRepositoryImpl(parkingDataSource: sl(), vehicleDataSource: sl(), parkingSpaceDataSource: sl()));
 
   // Register data sources
   sl.registerLazySingleton<AuthRemoteDataSource>(() => AuthRemoteDataSourceImpl());
   sl.registerLazySingleton<VehicleRemoteDataSource>(() => VehicleRemoteDataSourceImpl(firestore: sl()));
+  sl.registerLazySingleton<ParkingDataSource>(() => FirebaseParkingDataSource(firestore: sl()));
 
   // Register vehicle use cases
   sl.registerLazySingleton(() => AddVehicle(sl()));
@@ -159,6 +172,13 @@ void setupServiceLocator() {
   sl.registerLazySingleton(() => DeleteVehicle(sl()));
   sl.registerLazySingleton(() => CheckRegistrationExists(sl()));
   sl.registerLazySingleton(() => SearchVehiclesByRegistration(sl()));
+
+  // Register parking use cases
+  sl.registerLazySingleton(() => CreateParkingUseCase(sl()));
+  sl.registerLazySingleton(() => GetParkingUseCase(sl()));
+  sl.registerLazySingleton(() => GetActiveParkingUseCase(sl()));
+  sl.registerLazySingleton(() => GetUserParkingUseCase(sl()));
+  sl.registerLazySingleton(() => EndParkingUseCase(sl()));
 
   // Register parking space datasource
   sl.registerLazySingleton<ParkingSpaceRemoteDataSource>(() => ParkingSpaceRemoteDataSourceImpl(firestore: sl()));
@@ -184,6 +204,7 @@ void setupServiceLocator() {
 
   // Register BLoCs
   sl.registerFactory<auth_bloc.AuthBloc>(() => auth_bloc.AuthBloc(repository: sl()));
+
   sl.registerFactory<VehicleBloc>(
     () => VehicleBloc(
       addVehicleUseCase: sl(),
@@ -216,4 +237,7 @@ void setupServiceLocator() {
       watchParkingSpaces: sl(),
     ),
   );
+
+  // Register ParkingBloc - THIS WAS MISSING!
+  sl.registerFactory<ParkingBloc>(() => ParkingBloc(createParking: sl(), getParking: sl(), getActiveParking: sl(), getUserParking: sl(), endParking: sl()));
 }
