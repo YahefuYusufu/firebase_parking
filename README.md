@@ -155,9 +155,11 @@ parking/{parkingId}
 
 parking_spaces/{spaceId}
 
-
-Made with ❤️ and Flutter
 ├── space_number: string
 ├── status: string ('vacant' | 'occupied')
 ├── vehicle_id: string (nullable)
 └── hourly_rate: number
+
+
+Made with ❤️ and Flutter
+
