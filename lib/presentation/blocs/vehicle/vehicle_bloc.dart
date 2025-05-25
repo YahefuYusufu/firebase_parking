@@ -120,14 +120,39 @@ class VehicleBloc extends Bloc<VehicleEvent, VehicleState> {
   }
 
   Future<void> _onWatchUserVehicles(WatchUserVehicles event, Emitter<VehicleState> emit) async {
-    emit(VehicleLoading());
+    // Only emit loading if we don't already have vehicles loaded
+    if (state is! VehicleLoaded) {
+      emit(VehicleLoading());
+    }
 
+    // Cancel any existing subscription
     await _vehiclesSubscription?.cancel();
-    // For now, using repository directly for stream
-    // TOO: Create a WatchUserVehicles use case
-    _vehiclesSubscription = repository.watchUserVehicles(event.userId).listen((result) {
-      result.fold((failure) => emit(VehicleError(failure.message)), (vehicles) => emit(VehicleLoaded(vehicles: vehicles)));
-    });
+
+    // Set up the stream subscription
+    _vehiclesSubscription = repository
+        .watchUserVehicles(event.userId)
+        .listen(
+          (result) {
+            result.fold(
+              (failure) {
+                if (!emit.isDone) {
+                  emit(VehicleError(failure.message));
+                }
+              },
+              (vehicles) {
+                if (!emit.isDone) {
+                  emit(VehicleLoaded(vehicles: vehicles));
+                }
+              },
+            );
+          },
+          onError: (error) {
+            print("VehicleBloc: Stream error: $error");
+            if (!emit.isDone) {
+              emit(VehicleError('Failed to watch vehicles: ${error.toString()}'));
+            }
+          },
+        );
   }
 
   @override
