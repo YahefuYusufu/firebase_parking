@@ -1,16 +1,160 @@
-# firebase_parking
+Firebase Parking System 🚗
+A modern parking management system built with Flutter and Firebase, featuring real-time parking session tracking, vehicle management, and user profiles.
+🌟 Features
+🔐 Authentication
 
-A new Flutter project.
+User registration and login with Firebase Auth
+Secure user sessions with automatic logout
+Profile management with personal information
 
-## Getting Started
+🚗 Vehicle Management
 
-This project is a starting point for a Flutter application.
+Register multiple vehicles per user
+Support for different vehicle types (Car, Motorcycle, Truck, Van, Bus)
+Real-time vehicle data synchronization
+Edit and delete vehicle functionality
+Registration number validation to prevent duplicates
 
-A few resources to get you started if this is your first Flutter project:
+🅿️ Parking System
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Start and end parking sessions
+Real-time parking space availability
+Automatic parking space status updates
+Duration tracking and fee calculation
+Support for hourly rates
+Prevent double parking (one vehicle per space)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+📊 User Dashboard
+
+Clean profile interface with user information
+Real-time vehicle list with management options
+Parking history with detailed session information
+Active parking session indicators
+Fee calculations and duration tracking
+
+🎨 Modern UI/UX
+
+Dark and light theme support
+Terminal-style dark mode with monospace fonts
+Material Design 3 components
+Responsive design for different screen sizes
+Clean expandable sections with smooth animations
+
+🏗️ Architecture
+This app follows Clean Architecture principles with clear separation of concerns:
+lib/
+├── core/                     # Core utilities and errors
+│   └── errors/
+│       └── failures.dart
+├── data/                     # Data layer
+│   ├── datasources/         # Remote data sources
+│   │   ├── vehicle_remote_datasource.dart
+│   │   └── parking_data_source.dart
+│   ├── models/              # Data models
+│   │   ├── vehicles/
+│   │   ├── parking/
+│   │   └── person/
+│   └── repositories/        # Repository implementations
+│       └── vehicle_repository_impl.dart
+├── domain/                  # Business logic layer
+│   ├── entities/           # Core business entities
+│   │   ├── vehicle_entity.dart
+│   │   └── parking_entity.dart
+│   ├── repositories/       # Repository interfaces
+│   │   └── vehicle_repository.dart
+│   └── usecases/          # Business use cases
+│       ├── vehicles/
+│       └── parking/
+└── presentation/           # UI layer
+    ├── blocs/             # State management
+    │   ├── auth/
+    │   ├── vehicle/
+    │   └── parking/
+    └── screens/           # UI screens
+        └── profile_screen.dart
+🧩 Key Components
+
+Entities: Core business objects (Vehicle, Parking, User)
+Repositories: Abstract interfaces for data operations
+Data Sources: Firebase Firestore integration
+BLoC Pattern: State management with flutter_bloc
+Use Cases: Individual business operations
+
+🛠️ Tech Stack
+Frontend
+
+Flutter - Cross-platform mobile framework
+flutter_bloc - State management
+material_design_icons_flutter - Icon library
+equatable - Value equality
+dartz - Functional programming utilities
+
+Backend
+
+Firebase Auth - User authentication
+Cloud Firestore - Real-time database
+Firebase Security Rules - Data access control
+
+Architecture Patterns
+
+Clean Architecture - Separation of concerns
+BLoC Pattern - Predictable state management
+Repository Pattern - Data abstraction
+Use Case Pattern - Business logic encapsulation
+
+📱 Screenshots
+Profile Screen
+
+User information display
+Vehicle management section
+Parking history overview
+Dark/light theme toggle
+
+Vehicle Management
+
+Vehicle registration form
+Vehicle type selection
+Real-time vehicle updates
+Edit/delete functionality
+
+Parking Sessions
+
+Active parking indicators
+Duration and fee tracking
+Parking space management
+Session history
+
+🚀 Getting Started
+Prerequisites
+
+Flutter SDK (3.0+)
+Dart SDK (3.0+)
+Firebase project setup
+Android Studio / VS Code
+
+Firebase Configuration
+Firestore Collections
+users/{userId}
+├── name: string
+├── email: string
+├── personalNumber: string
+└── createdAt: timestamp
+
+vehicles/{vehicleId}
+├── registration_number: string
+├── type: string
+├── owner_id: string
+└── created_at: timestamp
+
+parking/{parkingId}
+├── vehicle_id: string
+├── parking_space_id: string
+├── started_at: timestamp
+├── finished_at: timestamp (nullable)
+└── hourly_rate: number
+
+parking_spaces/{spaceId}
+├── space_number: string
+├── status: string ('vacant' | 'occupied')
+├── vehicle_id: string (nullable)
+└── hourly_rate: number
