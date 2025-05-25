@@ -1,7 +1,7 @@
+import 'package:firebase_parking/presentation/pages/dashboard/widgets/currently_parked_section.dart';
 import 'package:firebase_parking/presentation/pages/dashboard/widgets/quick_actions_grid.dart';
 import 'package:flutter/material.dart';
 import 'widgets/dashboard_stats.dart';
-import 'widgets/parked_vehicle_card.dart';
 import 'widgets/recent_activity_card.dart';
 import 'widgets/system_status_card.dart';
 
@@ -30,9 +30,8 @@ class DashboardScreen extends StatelessWidget {
           const SizedBox(height: 20),
 
           // Currently Parked
-          Text('Currently Parked', style: theme.textTheme.titleLarge),
           const SizedBox(height: 12),
-          const ParkedVehicleCard(plate: 'ABC123', model: 'Toyota Corolla', location: 'Zone A - Space 12', timeRemaining: '2h 15m remaining'),
+          const CurrentlyParkedSection(),
 
           const SizedBox(height: 20),
 
