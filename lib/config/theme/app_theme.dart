@@ -46,7 +46,8 @@ class AppTheme {
         ),
       ),
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
+      // Changed from CardTheme to CardThemeData
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)), // Less rounded
       color: ParkOSColors.lightSurface,
@@ -109,7 +110,8 @@ class AppTheme {
         ),
       ),
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
+      // Changed from CardTheme to CardThemeData
       elevation: 1,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(0), // Square corners
@@ -131,7 +133,8 @@ class AppTheme {
       labelStyle: const TextStyle(color: ParkOSColors.terminalGreen),
       hintStyle: const TextStyle(color: ParkOSColors.darkDivider),
     ),
-    dialogTheme: const DialogTheme(
+    dialogTheme: const DialogThemeData(
+      // Changed from DialogTheme to DialogThemeData
       backgroundColor: ParkOSColors.darkSurface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero, side: BorderSide(color: ParkOSColors.terminalGreen)),
     ),
