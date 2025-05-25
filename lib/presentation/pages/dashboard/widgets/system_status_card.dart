@@ -25,7 +25,7 @@ class SystemStatusCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('System Status: Operational', style: theme.textTheme.titleMedium),
-                    Text('All parking systems are functioning normally', style: theme.textTheme.bodyMedium),
+                    Text('All parking systems are functioning normally', style: theme.textTheme.bodyLarge),
                   ],
                 ),
               ),
