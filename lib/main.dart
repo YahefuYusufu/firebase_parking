@@ -1,4 +1,3 @@
-// ignore_for_file: avoid_print
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_parking/config/theme/app_theme.dart';
@@ -8,8 +7,10 @@ import 'package:firebase_parking/data/datasources/issue_data_source.dart';
 import 'package:firebase_parking/data/datasources/parking_data_source.dart';
 import 'package:firebase_parking/data/datasources/parking_space_remote_datasource.dart';
 import 'package:firebase_parking/data/datasources/vehicle_remote_datasource.dart';
+import 'package:firebase_parking/data/datasources/notification_local_datasource.dart';
 import 'package:firebase_parking/data/repository/auth_repository_impl.dart';
 import 'package:firebase_parking/data/repository/issue_repository_impl.dart';
+import 'package:firebase_parking/data/repository/notification_repository_impl.dart';
 import 'package:firebase_parking/data/repository/parking_repository_impl.dart';
 import 'package:firebase_parking/data/repository/parking_space_repository_impl.dart';
 import 'package:firebase_parking/data/repository/vehicle_repository_impl.dart';
@@ -18,6 +19,7 @@ import 'package:firebase_parking/domain/repositories/issue_repository.dart';
 import 'package:firebase_parking/domain/repositories/parking_repository.dart';
 import 'package:firebase_parking/domain/repositories/parking_space_repository.dart';
 import 'package:firebase_parking/domain/repositories/vehicle_repository.dart';
+import 'package:firebase_parking/domain/repositories/notification_repository.dart';
 import 'package:firebase_parking/domain/usecases/issue/create_issue_usecase.dart';
 import 'package:firebase_parking/domain/usecases/issue/get_user_issues_usecase.dart';
 import 'package:firebase_parking/domain/usecases/parking/create_parking_usecase.dart';
@@ -54,6 +56,8 @@ import 'package:firebase_parking/presentation/blocs/issue/issue_bloc.dart';
 import 'package:firebase_parking/presentation/blocs/parking/parking_bloc.dart';
 import 'package:firebase_parking/presentation/blocs/parking_space/parking_space_bloc.dart';
 import 'package:firebase_parking/presentation/blocs/vehicle/vehicle_bloc.dart';
+import 'package:firebase_parking/presentation/blocs/notification/notification_bloc.dart';
+import 'package:firebase_parking/presentation/blocs/notification/notification_event.dart';
 import 'package:firebase_parking/presentation/pages/auth/complete_profile_screen.dart';
 import 'package:firebase_parking/presentation/pages/auth/login_screen.dart';
 import 'package:firebase_parking/presentation/pages/auth/register_screen.dart';
@@ -100,12 +104,14 @@ void main() async {
         ChangeNotifierProvider(create: (_) => themeProvider),
         ChangeNotifierProvider(create: (_) => DataProvider()),
         BlocProvider<auth_bloc.AuthBloc>(create: (context) => sl<auth_bloc.AuthBloc>()..add(AuthCheckRequested())),
+        // Add NotificationBloc provider first (others depend on it)
+        BlocProvider<NotificationBloc>(create: (context) => sl<NotificationBloc>()..add(const InitializeNotifications())),
         // Add VehicleBloc provider
         BlocProvider<VehicleBloc>(create: (context) => sl<VehicleBloc>()),
         // Add ParkingSpaceBloc provider
         BlocProvider<ParkingSpaceBloc>(create: (context) => sl<ParkingSpaceBloc>()),
-        // Add ParkingBloc provider
-        BlocProvider<ParkingBloc>(create: (context) => sl<ParkingBloc>()),
+        // Update ParkingBloc provider to include NotificationBloc
+        BlocProvider<ParkingBloc>(create: (context) => sl<ParkingBloc>(param1: context.read<NotificationBloc>())),
         // Add IssueBloc provider
         BlocProvider<IssueBloc>(create: (context) => sl<IssueBloc>()),
       ],
@@ -161,6 +167,10 @@ void setupServiceLocator() {
 
   // External dependencies
   sl.registerLazySingleton(() => FirebaseFirestore.instance);
+
+  // Register notification data source and repository
+  sl.registerLazySingleton<NotificationLocalDataSource>(() => NotificationLocalDataSourceImpl());
+  sl.registerLazySingleton<NotificationRepository>(() => NotificationRepositoryImpl(localDataSource: sl()));
 
   // Register repositories
   sl.registerLazySingleton<AuthRepository>(() => AuthRepositoryImpl(remoteDataSource: sl()));
@@ -219,6 +229,9 @@ void setupServiceLocator() {
   // Register BLoCs
   sl.registerFactory<auth_bloc.AuthBloc>(() => auth_bloc.AuthBloc(repository: sl()));
 
+  // Register NotificationBloc
+  sl.registerFactory<NotificationBloc>(() => NotificationBloc(notificationRepository: sl()));
+
   sl.registerFactory<VehicleBloc>(
     () => VehicleBloc(
       addVehicleUseCase: sl(),
@@ -252,9 +265,11 @@ void setupServiceLocator() {
     ),
   );
 
-  // Register ParkingBloc
-  sl.registerFactory<ParkingBloc>(() => ParkingBloc(createParking: sl(), getParking: sl(), getActiveParking: sl(), getUserParking: sl(), endParking: sl()));
+  // Register ParkingBloc with NotificationBloc dependency
+  sl.registerFactoryParam<ParkingBloc, NotificationBloc, void>(
+    (notificationBloc, _) => ParkingBloc(createParking: sl(), getParking: sl(), getActiveParking: sl(), getUserParking: sl(), endParking: sl(), notificationBloc: notificationBloc),
+  );
 
-  // Register IssueBloc - THIS WAS MISSING!
+  // Register IssueBloc
   sl.registerFactory<IssueBloc>(() => IssueBloc(createIssue: sl(), getUserIssues: sl()));
 }
