@@ -13,57 +13,80 @@ class NotificationModel extends NotificationEntity {
     return NotificationEntity(id: id, title: title, body: body, scheduledTime: scheduledTime, parkingId: parkingId, type: type);
   }
 
+  // Generate 32-bit safe notification IDs
+  static int _generateSafeId() {
+    // 2147483647 is 2^31-1 (max positive 32-bit integer)
+    return (DateTime.now().millisecondsSinceEpoch % 2147483647).toInt();
+  }
+
   // Create parking reminder notifications
   static List<NotificationModel> createParkingReminders({required String parkingId, required String vehicleRegistration, required DateTime parkingStartTime}) {
     final List<NotificationModel> notifications = [];
-    final baseId = DateTime.now().millisecondsSinceEpoch % 2147483647;
-    // 1 hour reminder
+    final baseId = _generateSafeId();
+
+    // Always schedule from current time with bigger buffer
+    final now = DateTime.now();
+    final scheduleFrom = now.add(const Duration(seconds: 20));
+
+    print("🕐 Current time: ${now.toIso8601String()}");
+    print("🕐 Parking start time: ${parkingStartTime.toIso8601String()}");
+    print("🕐 Will schedule from: ${scheduleFrom.toIso8601String()}");
+
+    // 30 seconds reminder (was 1 hour)
+    final firstNotificationTime = scheduleFrom.add(const Duration(seconds: 30));
     notifications.add(
       NotificationModel(
         id: baseId + 1,
         title: "Parking Reminder",
-        body: "You've been parked for 1 hour with $vehicleRegistration",
-        scheduledTime: parkingStartTime.add(const Duration(hours: 1)),
+        body: "You've been parked for 30 seconds with $vehicleRegistration (Test Notification)",
+        scheduledTime: firstNotificationTime,
         parkingId: parkingId,
         type: NotificationType.parkingReminder,
       ),
     );
+    print("📅 First notification scheduled for: ${firstNotificationTime.toIso8601String()}");
 
-    // 2 hour reminder
+    // 1 minute reminder (was 2 hours)
+    final secondNotificationTime = scheduleFrom.add(const Duration(minutes: 1, seconds: 10));
     notifications.add(
       NotificationModel(
         id: baseId + 2,
         title: "Parking Reminder",
-        body: "You've been parked for 2 hours with $vehicleRegistration",
-        scheduledTime: parkingStartTime.add(const Duration(hours: 2)),
+        body: "You've been parked for 1 minute with $vehicleRegistration (Test Notification)",
+        scheduledTime: secondNotificationTime,
         parkingId: parkingId,
         type: NotificationType.parkingReminder,
       ),
     );
+    print("📅 Second notification scheduled for: ${secondNotificationTime.toIso8601String()}");
 
-    // 4 hour reminder
+    // 2 minute reminder (was 4 hours)
+    final thirdNotificationTime = scheduleFrom.add(const Duration(minutes: 2, seconds: 10));
     notifications.add(
       NotificationModel(
         id: baseId + 3,
         title: "Long Parking Alert",
-        body: "You've been parked for 4 hours with $vehicleRegistration. Don't forget to check your parking!",
-        scheduledTime: parkingStartTime.add(const Duration(hours: 4)),
+        body: "You've been parked for 2 minutes with $vehicleRegistration. Test notification working! (Test Notification)",
+        scheduledTime: thirdNotificationTime,
         parkingId: parkingId,
         type: NotificationType.parkingReminder,
       ),
     );
+    print("📅 Third notification scheduled for: ${thirdNotificationTime.toIso8601String()}");
 
-    // 8 hour reminder (daily reminder)
+    // 3 minute reminder (was 8 hours)
+    final fourthNotificationTime = scheduleFrom.add(const Duration(minutes: 3, seconds: 10));
     notifications.add(
       NotificationModel(
         id: baseId + 4,
         title: "Daily Parking Reminder",
-        body: "You've been parked all day with $vehicleRegistration. Current cost may be significant.",
-        scheduledTime: parkingStartTime.add(const Duration(hours: 8)),
+        body: "You've been parked for 3 minutes with $vehicleRegistration. All notifications working! (Test Notification)",
+        scheduledTime: fourthNotificationTime,
         parkingId: parkingId,
         type: NotificationType.parkingReminder,
       ),
     );
+    print("📅 Fourth notification scheduled for: ${fourthNotificationTime.toIso8601String()}");
 
     return notifications;
   }
@@ -71,7 +94,7 @@ class NotificationModel extends NotificationEntity {
   // Create parking started notification
   static NotificationModel createParkingStarted({required String parkingId, required String vehicleRegistration, required String parkingSpaceNumber}) {
     return NotificationModel(
-      id: DateTime.now().millisecondsSinceEpoch,
+      id: _generateSafeId(),
       title: "Parking Started",
       body: "$vehicleRegistration is now parked in space $parkingSpaceNumber",
       scheduledTime: DateTime.now(),
@@ -87,7 +110,7 @@ class NotificationModel extends NotificationEntity {
     final durationText = hours > 0 ? "${hours}h ${minutes}m" : "${minutes}m";
 
     return NotificationModel(
-      id: DateTime.now().millisecondsSinceEpoch,
+      id: _generateSafeId(),
       title: "Parking Ended",
       body: "$vehicleRegistration parked for $durationText. Total cost: ${cost.toStringAsFixed(2)} kr",
       scheduledTime: DateTime.now(),

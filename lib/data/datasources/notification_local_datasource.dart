@@ -16,6 +16,7 @@ abstract class NotificationLocalDataSource {
 class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
   late FlutterLocalNotificationsPlugin _plugin;
   bool _isInitialized = false;
+  int _currentBadgeCount = 0; // Track badge count
 
   @override
   Future<FlutterLocalNotificationsPlugin> initialize() async {
@@ -38,7 +39,7 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
 
   void _onNotificationTapped(NotificationResponse response) {
     print("🔔 Notification tapped: ${response.payload}");
-    // TO2DO: Handle notification tap - navigate to parking details
+    // TOD2O: Handle notification tap - navigate to parking details
   }
 
   Future<void> _configureLocalTimeZone() async {
@@ -53,8 +54,48 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     await initialize();
     await requestPermissions();
 
-    const notificationDetails = NotificationDetails(
-      iOS: DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true, sound: 'default', threadIdentifier: 'parking_notifications'),
+    // Validation: Check if scheduled time is in the future
+    final now = DateTime.now();
+    final scheduledTime = notification.scheduledTime;
+
+    print("🕐 Current time: ${now.toIso8601String()}");
+    print("🕐 Scheduled time: ${scheduledTime.toIso8601String()}");
+    print("🕐 Time difference: ${scheduledTime.difference(now).inSeconds} seconds");
+
+    if (scheduledTime.isBefore(now) || scheduledTime.isAtSameMomentAs(now)) {
+      print("❌ ERROR: Scheduled time is not in the future!");
+      print("❌ Current: $now");
+      print("❌ Scheduled: $scheduledTime");
+
+      // Auto-fix: Schedule 5 seconds from now
+      final correctedTime = now.add(const Duration(seconds: 5));
+      print("🔧 Auto-correcting to: $correctedTime");
+
+      final correctedNotification = NotificationModel(
+        id: notification.id,
+        title: notification.title,
+        body: "${notification.body} [Auto-corrected]",
+        scheduledTime: correctedTime,
+        parkingId: notification.parkingId,
+        type: notification.type,
+      );
+
+      // Recursively call with corrected time
+      return await scheduleNotification(correctedNotification);
+    }
+
+    // Increment badge count for each notification
+    _currentBadgeCount++;
+
+    final notificationDetails = NotificationDetails(
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        sound: 'default',
+        badgeNumber: _currentBadgeCount, // Use incrementing badge number
+        threadIdentifier: 'parking_notifications',
+      ),
     );
 
     final scheduledDate = tz.TZDateTime.from(notification.scheduledTime, tz.local);
@@ -62,6 +103,7 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     print("⏰ Scheduling notification ID: ${notification.id}");
     print("📅 Scheduled for: ${scheduledDate.toIso8601String()}");
     print("📝 Title: ${notification.title}");
+    print("🔢 Badge number: $_currentBadgeCount");
 
     await _plugin.zonedSchedule(
       notification.id,
@@ -78,14 +120,26 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
   Future<void> cancelNotification(int id) async {
     await initialize();
     await _plugin.cancel(id);
+
+    // Decrease badge count when cancelling
+    if (_currentBadgeCount > 0) {
+      _currentBadgeCount--;
+    }
+
     print("❌ Cancelled notification ID: $id");
+    print("🔢 Badge count after cancel: $_currentBadgeCount");
   }
 
   @override
   Future<void> cancelAllNotifications() async {
     await initialize();
     await _plugin.cancelAll();
+
+    // Reset badge count
+    _currentBadgeCount = 0;
+
     print("🗑️ Cancelled all notifications");
+    print("🔢 Badge count reset to: $_currentBadgeCount");
   }
 
   @override
