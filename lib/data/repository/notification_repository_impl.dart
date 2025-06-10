@@ -60,7 +60,7 @@ class NotificationRepositoryImpl implements NotificationRepository {
     }
   }
 
-  // NEW: Schedule reminders based on ParkingEntity
+  // NEW: Schedule reminders based on ParkingEntity with interactive expiry notifications
   @override
   Future<Either<Failure, List<int>>> scheduleEntityBasedReminders(ParkingEntity parking) async {
     try {
@@ -73,11 +73,33 @@ class NotificationRepositoryImpl implements NotificationRepository {
         parkingId: parking.id!,
         vehicleRegistration: parking.vehicleRegistration ?? 'Unknown Vehicle',
         parkingStartTime: parking.startedAt,
-        totalTimeLimit: parking.totalTimeLimit, // Use actual time limit
+        totalTimeLimit: parking.totalTimeLimit,
         parkingSpaceNumber: parking.parkingSpaceNumber,
       );
 
-      return await _scheduleNotificationList(parking.id!, notifications);
+      final List<int> notificationIds = [];
+
+      for (final notification in notifications) {
+        // Check if this is an expiry notification
+        final isExpiryNotification = notification.type == NotificationType.parkingExpiry;
+
+        if (isExpiryNotification) {
+          // Use the new method with action buttons for expiry notifications
+          await localDataSource.scheduleNotificationWithActions(notification, includeExtendAction: true);
+        } else {
+          // Use regular notification for reminders
+          await localDataSource.scheduleNotification(notification);
+        }
+
+        notificationIds.add(notification.id);
+        print("⏰ Scheduled ${isExpiryNotification ? 'interactive' : 'regular'} notification for ${notification.scheduledTime}");
+      }
+
+      // Store the IDs for this parking session
+      _parkingNotificationIds[parking.id!] = notificationIds;
+
+      print("🎯 Scheduled ${notificationIds.length} notifications (with actions) for parking ${parking.id}");
+      return Right(notificationIds);
     } catch (e) {
       print("❌ Error scheduling entity-based reminders: $e");
       return Left(NotificationFailure('Failed to schedule entity-based reminders: ${e.toString()}'));
@@ -273,6 +295,19 @@ class NotificationRepositoryImpl implements NotificationRepository {
     } catch (e) {
       print("❌ Error requesting notification permissions: $e");
       return Left(NotificationFailure('Failed to request notification permissions: ${e.toString()}'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> clearAllPendingNotifications() async {
+    try {
+      await localDataSource.clearAllPendingNotifications();
+      _parkingNotificationIds.clear(); // Also clear our tracking
+      print("🧹 Cleared all pending notifications from repository");
+      return const Right(null);
+    } catch (e) {
+      print("❌ Error clearing pending notifications: $e");
+      return Left(NotificationFailure('Failed to clear pending notifications: ${e.toString()}'));
     }
   }
 }

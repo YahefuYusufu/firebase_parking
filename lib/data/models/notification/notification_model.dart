@@ -158,7 +158,7 @@ class NotificationModel extends NotificationEntity {
     return notifications;
   }
 
-  // Create parking extension notification
+  // Create parking extension notification with action buttons
   static NotificationModel createParkingExtended({
     required String parkingId,
     required String vehicleRegistration,
@@ -177,6 +177,26 @@ class NotificationModel extends NotificationEntity {
       scheduledTime: DateTime.now(),
       parkingId: parkingId,
       type: NotificationType.parkingReminder,
+    );
+  }
+
+  // NEW: Create parking expiry notification with extend action
+  static NotificationModel createExpiryWithExtendAction({
+    required String parkingId,
+    required String vehicleRegistration,
+    required DateTime expiryTime,
+    String? parkingSpaceNumber,
+  }) {
+    final space = parkingSpaceNumber != null ? " in space $parkingSpaceNumber" : "";
+    final expiryTimeStr = "${expiryTime.hour.toString().padLeft(2, '0')}:${expiryTime.minute.toString().padLeft(2, '0')}";
+
+    return NotificationModel(
+      id: _generateSafeId(),
+      title: "Parking Expired!",
+      body: "$vehicleRegistration$space expired at $expiryTimeStr. Extend now to avoid penalties!",
+      scheduledTime: expiryTime,
+      parkingId: parkingId,
+      type: NotificationType.parkingExpiry,
     );
   }
 

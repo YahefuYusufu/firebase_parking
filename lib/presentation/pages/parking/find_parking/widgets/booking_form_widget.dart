@@ -31,6 +31,22 @@ class _BookingFormWidgetState extends State<BookingFormWidget> {
   late TextEditingController _vehicleTypeController;
   VehicleEntity? selectedVehicle;
 
+  // NEW: Duration selection
+  Duration selectedDuration = const Duration(hours: 2); // Default 2 hours
+  int customHours = 2;
+  int customMinutes = 0;
+
+  // Predefined duration options
+  final List<Duration> commonDurations = [
+    const Duration(minutes: 1), // NEW: 1 minute for testing
+    const Duration(minutes: 5), // NEW: 5 minutes for testing
+    const Duration(minutes: 30),
+    const Duration(hours: 1),
+    const Duration(hours: 2),
+    const Duration(hours: 4),
+    const Duration(hours: 8),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -185,8 +201,15 @@ class _BookingFormWidgetState extends State<BookingFormWidget> {
       return;
     }
 
-    // Create the parking - adjust this event name if needed
-    final ParkingEvent createEvent = CreateParkingEvent(vehicleId: vehicleId, parkingSpaceId: widget.space.id!);
+    // NEW: Use CreateParkingWithDurationEvent instead of CreateParkingEvent
+    final ParkingEvent createEvent = CreateParkingWithDurationEvent(
+      vehicleId: vehicleId,
+      parkingSpaceId: widget.space.id!,
+      duration: selectedDuration, // Use selected duration
+      vehicleRegistration: selectedVehicle?.registrationNumber ?? _vehicleRegController.text,
+      parkingSpaceNumber: widget.space.spaceNumber,
+      hourlyRate: widget.space.hourlyRate,
+    );
 
     context.read<ParkingBloc>().add(createEvent);
 
@@ -209,7 +232,8 @@ class _BookingFormWidgetState extends State<BookingFormWidget> {
       if (state is ParkingState) {
         // Check properties or methods to determine the state type
         if (state.toString().contains('ParkingCreated') || state.toString().contains('parking created')) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Booking confirmed for Space ${widget.space.spaceNumber}')));
+          final durationText = _formatDuration(selectedDuration);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Booking confirmed for Space ${widget.space.spaceNumber} ($durationText)')));
           Navigator.of(context).pop(true);
           parkingSubscription?.cancel();
         } else if (state.toString().contains('ParkingError') || state.toString().contains('error')) {
@@ -237,6 +261,164 @@ class _BookingFormWidgetState extends State<BookingFormWidget> {
       print('Error getting error message from state: $e');
     }
     return 'Unknown error';
+  }
+
+  // NEW: Helper method to format duration
+  String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+
+    if (hours > 0 && minutes > 0) {
+      return '${hours}h ${minutes}m';
+    } else if (hours > 0) {
+      return '${hours}h';
+    } else {
+      return '${minutes}m';
+    }
+  }
+
+  // NEW: Calculate estimated cost
+  double _calculateEstimatedCost() {
+    final hours = selectedDuration.inMinutes / 60.0;
+    return hours * widget.space.hourlyRate;
+  }
+
+  // NEW: Build duration selection widget
+  Widget _buildDurationSelection() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Parking Duration', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 16),
+
+            // Quick duration buttons
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children:
+                  commonDurations.map((duration) {
+                    final isSelected = selectedDuration == duration;
+                    return FilterChip(
+                      label: Text(_formatDuration(duration)),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() {
+                            selectedDuration = duration;
+                          });
+                        }
+                      },
+                      backgroundColor: isSelected ? Theme.of(context).colorScheme.primary : null,
+                      labelStyle: TextStyle(color: isSelected ? Theme.of(context).colorScheme.onPrimary : null),
+                    );
+                  }).toList(),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Custom duration option
+            const Text('Custom Duration:'),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                // Hours
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Hours', style: TextStyle(fontSize: 12)),
+                      Container(
+                        decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<int>(
+                            value: customHours,
+                            isExpanded: true,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            items:
+                                List.generate(13, (index) => index).map((hour) {
+                                  return DropdownMenuItem(value: hour, child: Text('$hour h'));
+                                }).toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                customHours = value ?? 0;
+                                selectedDuration = Duration(hours: customHours, minutes: customMinutes);
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Minutes
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Minutes', style: TextStyle(fontSize: 12)),
+                      Container(
+                        decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<int>(
+                            value: customMinutes,
+                            isExpanded: true,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            items:
+                                [0, 1, 2, 3, 4, 5, 10, 15, 30, 45].map((minute) {
+                                  return DropdownMenuItem(value: minute, child: Text('$minute min'));
+                                }).toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                customMinutes = value ?? 0;
+                                selectedDuration = Duration(hours: customHours, minutes: customMinutes);
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // Show selected duration and end time
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(8)),
+              child: Row(
+                children: [
+                  const Icon(Icons.timer_outlined),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Duration: ${_formatDuration(selectedDuration)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text('Expires at: ${_getExpiryTime()}', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // NEW: Get expiry time string
+  String _getExpiryTime() {
+    final now = DateTime.now();
+    final expiryTime = now.add(selectedDuration);
+    return '${expiryTime.hour.toString().padLeft(2, '0')}:${expiryTime.minute.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -389,7 +571,12 @@ class _BookingFormWidgetState extends State<BookingFormWidget> {
 
                 const SizedBox(height: 32),
 
-                // Booking Summary
+                // NEW: Duration Selection
+                _buildDurationSelection(),
+
+                const SizedBox(height: 24),
+
+                // Updated Booking Summary
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -400,7 +587,20 @@ class _BookingFormWidgetState extends State<BookingFormWidget> {
                         const SizedBox(height: 16),
                         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Rate:'), Text('\$${widget.space.hourlyRate.toStringAsFixed(2)}/hour')]),
                         const SizedBox(height: 8),
-                        const Text('Parking fees will be calculated based on your actual parking duration.', style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12)),
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Duration:'), Text(_formatDuration(selectedDuration))]),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Estimated Cost:', style: TextStyle(fontWeight: FontWeight.bold)),
+                            Text('\$${_calculateEstimatedCost().toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Final cost will be calculated based on actual parking duration and any extensions.',
+                          style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
+                        ),
                       ],
                     ),
                   ),
@@ -423,7 +623,7 @@ class _BookingFormWidgetState extends State<BookingFormWidget> {
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Text('✅', style: TextStyle(fontSize: 20)),
                       const SizedBox(width: 8),
-                      const Text('Confirm Booking', style: TextStyle(fontSize: 16)),
+                      Text('Confirm Booking (${_formatDuration(selectedDuration)})', style: const TextStyle(fontSize: 16)),
                     ],
                   ),
                 ),
@@ -433,12 +633,7 @@ class _BookingFormWidgetState extends State<BookingFormWidget> {
             // Loading overlay
             if (isLoading)
               Container(
-                color: Color.fromRGBO(
-                  0,
-                  0,
-                  0,
-                  0.3, // Using RGBA values directly instead of withOpacity
-                ),
+                color: const Color.fromRGBO(0, 0, 0, 0.3),
                 child: const Center(
                   child: Card(
                     child: Padding(

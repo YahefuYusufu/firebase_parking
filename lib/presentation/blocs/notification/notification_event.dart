@@ -96,6 +96,10 @@ class CancelAllNotifications extends NotificationEvent {
   const CancelAllNotifications();
 }
 
+class ClearAllPendingNotifications extends NotificationEvent {
+  const ClearAllPendingNotifications();
+}
+
 class CheckNotificationPermissions extends NotificationEvent {
   const CheckNotificationPermissions();
 }

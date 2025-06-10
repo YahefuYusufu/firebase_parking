@@ -48,4 +48,6 @@ abstract class NotificationRepository {
 
   /// Request notification permissions
   Future<Either<Failure, bool>> requestPermissions();
+
+  Future<Either<Failure, void>> clearAllPendingNotifications();
 }

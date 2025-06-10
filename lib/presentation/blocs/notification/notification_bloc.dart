@@ -12,18 +12,23 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     on<InitializeNotifications>(_onInitializeNotifications);
     on<RequestNotificationPermissions>(_onRequestNotificationPermissions);
     on<ScheduleParkingReminders>(_onScheduleParkingReminders);
-    on<ScheduleEntityBasedReminders>(_onScheduleEntityBasedReminders); // NEW
-    on<ScheduleTestReminders>(_onScheduleTestReminders); // NEW
-    on<HandleParkingExtension>(_onHandleParkingExtension); // NEW
+    on<ScheduleEntityBasedReminders>(_onScheduleEntityBasedReminders);
+    on<ScheduleTestReminders>(_onScheduleTestReminders);
+    on<HandleParkingExtension>(_onHandleParkingExtension);
     on<ShowParkingStartedNotification>(_onShowParkingStartedNotification);
     on<ShowParkingEndedNotification>(_onShowParkingEndedNotification);
     on<CancelParkingNotifications>(_onCancelParkingNotifications);
     on<CancelAllNotifications>(_onCancelAllNotifications);
     on<CheckNotificationPermissions>(_onCheckNotificationPermissions);
+    on<ClearAllPendingNotifications>(_onClearAllPendingNotifications); // NEW
   }
 
   Future<void> _onInitializeNotifications(InitializeNotifications event, Emitter<NotificationState> emit) async {
     emit(NotificationLoading());
+
+    // NEW: Clear old notifications first to prevent LED crash
+    final clearResult = await notificationRepository.clearAllPendingNotifications();
+    clearResult.fold((failure) => print("⚠️ Warning: Could not clear old notifications: ${failure.message}"), (_) => print("🧹 Successfully cleared old notifications"));
 
     final initResult = await notificationRepository.initialize();
 
@@ -38,6 +43,16 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
         permissionResult.fold((failure) => emit(NotificationError(failure.message)), (enabled) => emit(NotificationInitialized(permissionsGranted: enabled)));
       },
     );
+  }
+
+  // NEW: Handle clear all pending notifications
+  Future<void> _onClearAllPendingNotifications(ClearAllPendingNotifications event, Emitter<NotificationState> emit) async {
+    final result = await notificationRepository.clearAllPendingNotifications();
+
+    result.fold((failure) => emit(NotificationError(failure.message)), (_) {
+      emit(AllNotificationsCancelled());
+      print("🧹 All pending notifications cleared");
+    });
   }
 
   Future<void> _onRequestNotificationPermissions(RequestNotificationPermissions event, Emitter<NotificationState> emit) async {
