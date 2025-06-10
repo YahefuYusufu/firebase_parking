@@ -10,6 +10,7 @@ abstract class ParkingDataSource {
   Future<List<ParkingModel>> getActiveParking();
   Future<List<ParkingModel>> getUserParking(String userId);
   Future<ParkingModel> endParking(String parkingId);
+  Future<ParkingModel> updateParking(ParkingModel parking); // NEW: For extensions
 }
 
 class FirebaseParkingDataSource implements ParkingDataSource {
@@ -48,6 +49,31 @@ class FirebaseParkingDataSource implements ParkingDataSource {
 
     // 5. Return the created parking with the generated ID
     return parking.copyWith(id: docRef.id);
+  }
+
+  // NEW: Update parking method for extensions
+  @override
+  Future<ParkingModel> updateParking(ParkingModel parking) async {
+    try {
+      if (parking.id == null) {
+        throw Exception('Cannot update parking without ID');
+      }
+
+      // Update the parking record in Firestore
+      await _parkingCollection.doc(parking.id).update(parking.toFirestore());
+
+      // Return the updated parking
+      final updatedParking = await getParking(parking.id!);
+      if (updatedParking == null) {
+        throw Exception('Failed to retrieve updated parking record');
+      }
+
+      print('✅ Updated parking ${parking.id} with ${parking.extensions.length} extensions');
+      return updatedParking;
+    } catch (e) {
+      print('❌ Error updating parking ${parking.id}: $e');
+      throw Exception('Failed to update parking: $e');
+    }
   }
 
   @override

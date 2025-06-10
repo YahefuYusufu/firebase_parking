@@ -267,7 +267,15 @@ void setupServiceLocator() {
 
   // Register ParkingBloc with NotificationBloc dependency
   sl.registerFactoryParam<ParkingBloc, NotificationBloc, void>(
-    (notificationBloc, _) => ParkingBloc(createParking: sl(), getParking: sl(), getActiveParking: sl(), getUserParking: sl(), endParking: sl(), notificationBloc: notificationBloc),
+    (notificationBloc, _) => ParkingBloc(
+      createParking: sl(),
+      getParking: sl(),
+      getActiveParking: sl(),
+      getUserParking: sl(),
+      endParking: sl(),
+      notificationBloc: notificationBloc,
+      parkingRepository: sl(),
+    ),
   );
 
   // Register IssueBloc

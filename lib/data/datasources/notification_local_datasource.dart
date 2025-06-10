@@ -112,6 +112,7 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
       scheduledDate,
       notificationDetails,
       payload: notification.parkingId,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
     );
   }

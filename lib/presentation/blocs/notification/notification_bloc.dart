@@ -1,6 +1,5 @@
 // lib/presentation/blocs/notification/notification_bloc.dart
 
-import 'package:firebase_parking/data/models/notification/notification_model.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../domain/repositories/notification_repository.dart';
 import 'notification_event.dart';
@@ -13,6 +12,9 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     on<InitializeNotifications>(_onInitializeNotifications);
     on<RequestNotificationPermissions>(_onRequestNotificationPermissions);
     on<ScheduleParkingReminders>(_onScheduleParkingReminders);
+    on<ScheduleEntityBasedReminders>(_onScheduleEntityBasedReminders); // NEW
+    on<ScheduleTestReminders>(_onScheduleTestReminders); // NEW
+    on<HandleParkingExtension>(_onHandleParkingExtension); // NEW
     on<ShowParkingStartedNotification>(_onShowParkingStartedNotification);
     on<ShowParkingEndedNotification>(_onShowParkingEndedNotification);
     on<CancelParkingNotifications>(_onCancelParkingNotifications);
@@ -52,6 +54,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     });
   }
 
+  // Legacy method for backward compatibility
   Future<void> _onScheduleParkingReminders(ScheduleParkingReminders event, Emitter<NotificationState> emit) async {
     final result = await notificationRepository.scheduleParkingReminders(
       parkingId: event.parkingId,
@@ -61,33 +64,62 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
 
     result.fold((failure) => emit(NotificationError(failure.message)), (notificationIds) {
       emit(ParkingRemindersScheduled(parkingId: event.parkingId, notificationIds: notificationIds));
-      print("🎯 Scheduled ${notificationIds.length} reminders for ${event.vehicleRegistration}");
+      print("🎯 Scheduled ${notificationIds.length} reminders for ${event.vehicleRegistration} (legacy method)");
+    });
+  }
+
+  // NEW: Schedule reminders based on ParkingEntity
+  Future<void> _onScheduleEntityBasedReminders(ScheduleEntityBasedReminders event, Emitter<NotificationState> emit) async {
+    final result = await notificationRepository.scheduleEntityBasedReminders(event.parking);
+
+    result.fold((failure) => emit(NotificationError(failure.message)), (notificationIds) {
+      emit(ParkingRemindersScheduled(parkingId: event.parking.id!, notificationIds: notificationIds));
+      print("🎯 Scheduled ${notificationIds.length} entity-based reminders for ${event.parking.vehicleRegistration}");
+      print("⏰ Time limit: ${event.parking.formattedTotalTimeLimit}");
+    });
+  }
+
+  // NEW: Schedule test reminders
+  Future<void> _onScheduleTestReminders(ScheduleTestReminders event, Emitter<NotificationState> emit) async {
+    final result = await notificationRepository.scheduleTestReminders(
+      parkingId: event.parkingId,
+      vehicleRegistration: event.vehicleRegistration,
+      parkingStartTime: event.parkingStartTime,
+    );
+
+    result.fold((failure) => emit(NotificationError(failure.message)), (notificationIds) {
+      emit(ParkingRemindersScheduled(parkingId: event.parkingId, notificationIds: notificationIds));
+      print("🧪 Scheduled ${notificationIds.length} TEST reminders for ${event.vehicleRegistration}");
+    });
+  }
+
+  // NEW: Handle parking extension
+  Future<void> _onHandleParkingExtension(HandleParkingExtension event, Emitter<NotificationState> emit) async {
+    final result = await notificationRepository.handleParkingExtension(
+      parkingId: event.parkingId,
+      vehicleRegistration: event.vehicleRegistration,
+      additionalTime: event.additionalTime,
+      newExpiryTime: event.newExpiryTime,
+      parkingSpaceNumber: event.parkingSpaceNumber,
+    );
+
+    result.fold((failure) => emit(NotificationError(failure.message)), (notificationIds) {
+      emit(ParkingExtensionHandled(parkingId: event.parkingId, additionalTime: event.additionalTime, notificationIds: notificationIds));
+      print("🔄 Handled parking extension for ${event.vehicleRegistration}");
+      print("➕ Added ${event.additionalTime.inHours}h ${event.additionalTime.inMinutes % 60}m");
     });
   }
 
   Future<void> _onShowParkingStartedNotification(ShowParkingStartedNotification event, Emitter<NotificationState> emit) async {
-    // Create immediate notification for parking started
-    final notification = NotificationModel.createParkingStarted(
-      parkingId: event.parkingId,
-      vehicleRegistration: event.vehicleRegistration,
-      parkingSpaceNumber: event.parkingSpaceNumber,
-    );
-
-    final result = await notificationRepository.scheduleNotification(notification);
+    // Use the new repository method for parking started notifications
+    final result = await notificationRepository.notifyParkingStarted(event.parking);
 
     result.fold((failure) => emit(NotificationError(failure.message)), (_) => emit(ParkingNotificationShown('Parking started notification shown')));
   }
 
   Future<void> _onShowParkingEndedNotification(ShowParkingEndedNotification event, Emitter<NotificationState> emit) async {
-    // Create immediate notification for parking ended
-    final notification = NotificationModel.createParkingEnded(
-      parkingId: event.parkingId,
-      vehicleRegistration: event.vehicleRegistration,
-      duration: event.duration,
-      cost: event.cost,
-    );
-
-    final result = await notificationRepository.scheduleNotification(notification);
+    // Use the new repository method for parking ended notifications
+    final result = await notificationRepository.notifyParkingEnded(event.parking);
 
     result.fold((failure) => emit(NotificationError(failure.message)), (_) => emit(ParkingNotificationShown('Parking ended notification shown')));
   }

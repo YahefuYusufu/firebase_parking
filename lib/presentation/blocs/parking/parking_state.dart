@@ -38,6 +38,16 @@ class ParkingCreated extends ParkingState {
   List<Object?> get props => [parking];
 }
 
+// NEW: Parking extended state
+class ParkingExtended extends ParkingState {
+  final ParkingEntity parking;
+
+  const ParkingExtended(this.parking);
+
+  @override
+  List<Object?> get props => [parking];
+}
+
 class ParkingEnded extends ParkingState {
   final ParkingEntity parking;
 

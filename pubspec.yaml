@@ -34,10 +34,10 @@ dependencies:
     ^1.8.3
 
     # New notification dependencies
-  flutter_local_notifications: ^17.0.0
-  timezone: ^0.9.2
-  flutter_timezone: ^1.0.8
-  uuid: ^4.1.0
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.10.1
+  flutter_timezone: ^4.1.1
+  uuid: ^4.5.1
 
 dev_dependencies:
   flutter_test:

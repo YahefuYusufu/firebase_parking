@@ -27,8 +27,15 @@ class ParkingRepositoryImpl implements ParkingRepository {
         throw Exception('Parking space is not available');
       }
 
-      // Create a parking model from the entity
-      final parkingModel = ParkingModel(vehicle: vehicle, parkingSpace: parkingSpace, startedAt: parking.startedAt, finishedAt: parking.finishedAt);
+      // Create a parking model from the entity with all required fields
+      final parkingModel = ParkingModel(
+        vehicle: vehicle,
+        parkingSpace: parkingSpace,
+        startedAt: parking.startedAt,
+        finishedAt: parking.finishedAt,
+        originalTimeLimit: parking.originalTimeLimit, // NEW: Required field
+        extensions: parking.extensions.map((e) => ParkingExtensionModel.fromEntity(e)).toList(), // NEW: Extensions
+      );
 
       // Create the parking record
       final createdParking = await parkingDataSource.createParking(parkingModel);
@@ -42,25 +49,114 @@ class ParkingRepositoryImpl implements ParkingRepository {
 
   @override
   Future<ParkingEntity?> getParking(String parkingId) async {
-    final parkingModel = await parkingDataSource.getParking(parkingId);
-    return parkingModel?.toEntity();
+    try {
+      final parkingModel = await parkingDataSource.getParking(parkingId);
+      return parkingModel?.toEntity();
+    } catch (e) {
+      throw Exception('Failed to get parking: ${e.toString()}');
+    }
   }
 
   @override
   Future<List<ParkingEntity>> getActiveParking() async {
-    final parkingModels = await parkingDataSource.getActiveParking();
-    return parkingModels.map((model) => model.toEntity()).toList();
+    try {
+      final parkingModels = await parkingDataSource.getActiveParking();
+      return parkingModels.map((model) => model.toEntity()).toList();
+    } catch (e) {
+      throw Exception('Failed to get active parking: ${e.toString()}');
+    }
   }
 
   @override
   Future<List<ParkingEntity>> getUserParking(String userId) async {
-    final parkingModels = await parkingDataSource.getUserParking(userId);
-    return parkingModels.map((model) => model.toEntity()).toList();
+    try {
+      final parkingModels = await parkingDataSource.getUserParking(userId);
+      return parkingModels.map((model) => model.toEntity()).toList();
+    } catch (e) {
+      throw Exception('Failed to get user parking: ${e.toString()}');
+    }
   }
 
   @override
   Future<ParkingEntity> endParking(String parkingId) async {
-    final parkingModel = await parkingDataSource.endParking(parkingId);
-    return parkingModel.toEntity();
+    try {
+      final parkingModel = await parkingDataSource.endParking(parkingId);
+      return parkingModel.toEntity();
+    } catch (e) {
+      throw Exception('Failed to end parking: ${e.toString()}');
+    }
+  }
+
+  // NEW: Method to extend parking
+  @override
+  Future<ParkingEntity> extendParking(String parkingId, Duration additionalTime, double cost, {String? reason}) async {
+    try {
+      // Get current parking
+      final currentParking = await parkingDataSource.getParking(parkingId);
+      if (currentParking == null) {
+        throw Exception('Parking not found');
+      }
+
+      // Check if parking can be extended
+      final entity = currentParking.toEntity();
+      if (!entity.canExtend) {
+        throw Exception('Cannot extend parking: session has expired beyond grace period');
+      }
+
+      // Create extended parking model
+      final extendedModel = currentParking.extend(additionalTime: additionalTime, cost: cost, reason: reason);
+
+      // Update in database
+      final updatedParking = await parkingDataSource.updateParking(extendedModel);
+
+      return updatedParking.toEntity();
+    } catch (e) {
+      throw Exception('Failed to extend parking: ${e.toString()}');
+    }
+  }
+
+  // NEW: Method to get parking extensions
+  @override
+  Future<List<ParkingExtension>> getParkingExtensions(String parkingId) async {
+    try {
+      final parkingModel = await parkingDataSource.getParking(parkingId);
+      if (parkingModel == null) {
+        throw Exception('Parking not found');
+      }
+
+      return parkingModel.extensions.map((e) => e.toEntity()).toList();
+    } catch (e) {
+      throw Exception('Failed to get parking extensions: ${e.toString()}');
+    }
+  }
+
+  // NEW: Method to check if parking can be extended
+  @override
+  Future<bool> canExtendParking(String parkingId) async {
+    try {
+      final parkingModel = await parkingDataSource.getParking(parkingId);
+      if (parkingModel == null) {
+        return false;
+      }
+
+      return parkingModel.toEntity().canExtend;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // NEW: Method to get parking time remaining
+  @override
+  Future<Duration> getParkingTimeRemaining(String parkingId) async {
+    try {
+      final parkingModel = await parkingDataSource.getParking(parkingId);
+      if (parkingModel == null) {
+        throw Exception('Parking not found');
+      }
+
+      return parkingModel.toEntity().timeRemaining;
+    } catch (e) {
+      throw Exception('Failed to get parking time remaining: ${e.toString()}');
+    }
   }
 }
