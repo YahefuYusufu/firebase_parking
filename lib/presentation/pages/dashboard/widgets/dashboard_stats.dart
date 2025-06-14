@@ -12,13 +12,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class DashboardStats extends StatefulWidget {
-  const DashboardStats({super.key});
+  final VoidCallback? onRefreshRequested;
+  const DashboardStats({super.key, this.onRefreshRequested});
 
   @override
   State<DashboardStats> createState() => _DashboardStatsState();
 }
 
 class _DashboardStatsState extends State<DashboardStats> {
+  bool _isRefreshing = false;
+
   @override
   void initState() {
     super.initState();
@@ -26,6 +29,13 @@ class _DashboardStatsState extends State<DashboardStats> {
   }
 
   void _loadDashboardData() {
+    if (_isRefreshing) return;
+
+    print('📊 DashboardStats: Loading data...');
+    setState(() {
+      _isRefreshing = true;
+    });
+
     // Get the current user ID
     String? userId;
     final authState = context.read<AuthBloc>().state;
@@ -44,11 +54,19 @@ class _DashboardStatsState extends State<DashboardStats> {
       context.read<ParkingBloc>().add(GetUserParkingEvent(userId));
     }
 
-    // Load parking space statistics
     context.read<ParkingSpaceBloc>().add(GetAllParkingSpacesEvent());
 
     // Load active parking
     context.read<ParkingBloc>().add(GetActiveParkingEvent());
+
+    // Reset refresh flag after delay with setState
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _isRefreshing = false;
+        });
+      }
+    });
   }
 
   @override
@@ -62,6 +80,7 @@ class _DashboardStatsState extends State<DashboardStats> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header without refresh button
             Text('Summary', style: theme.textTheme.titleLarge),
             const SizedBox(height: 16),
 
@@ -71,16 +90,56 @@ class _DashboardStatsState extends State<DashboardStats> {
                 BlocListener<VehicleBloc, VehicleState>(
                   listener: (context, state) {
                     // Handle vehicle state changes if needed
+                    print('📊 DashboardStats heard vehicle state: ${state.runtimeType}');
+
+                    // Reset refresh flag when vehicle data is loaded
+                    String stateName = state.runtimeType.toString().toLowerCase();
+                    if (!stateName.contains('loading') && _isRefreshing) {
+                      print('📊 Vehicle data loaded, stopping refresh indicator...');
+                      setState(() {
+                        _isRefreshing = false;
+                      });
+                    }
                   },
                 ),
                 BlocListener<ParkingBloc, ParkingState>(
                   listener: (context, state) {
                     // Handle parking state changes if needed
+                    print('📊 DashboardStats heard parking state: ${state.runtimeType}');
+
+                    // Reset refresh flag when any parking data is loaded
+                    String stateName = state.runtimeType.toString().toLowerCase();
+                    if (!stateName.contains('loading') && _isRefreshing) {
+                      print('📊 Parking data loaded, stopping refresh indicator...');
+                      setState(() {
+                        _isRefreshing = false;
+                      });
+                    }
+
+                    // If parking was extended, refresh stats
+                    if (stateName.contains('extend') && stateName.contains('success')) {
+                      print('📊 Parking extended, refreshing stats...');
+                      Future.delayed(const Duration(milliseconds: 500), () {
+                        if (mounted && !_isRefreshing) {
+                          _loadDashboardData();
+                        }
+                      });
+                    }
                   },
                 ),
                 BlocListener<ParkingSpaceBloc, ParkingSpaceState>(
                   listener: (context, state) {
                     // Handle parking space state changes if needed
+                    print('📊 DashboardStats heard space state: ${state.runtimeType}');
+
+                    // Reset refresh flag when parking space data is loaded
+                    String stateName = state.runtimeType.toString().toLowerCase();
+                    if (!stateName.contains('loading') && _isRefreshing) {
+                      print('📊 Parking space data loaded, stopping refresh indicator...');
+                      setState(() {
+                        _isRefreshing = false;
+                      });
+                    }
                   },
                 ),
               ],
@@ -91,7 +150,8 @@ class _DashboardStatsState extends State<DashboardStats> {
                   BlocBuilder<VehicleBloc, VehicleState>(
                     builder: (context, state) {
                       final vehicles = _getVehiclesFromState(state);
-                      return _buildStatItem(context, vehicles.length.toString(), 'Vehicles');
+                      final isLoading = state.runtimeType.toString().toLowerCase().contains('loading');
+                      return _buildStatItem(context, vehicles.length.toString(), 'Vehicles', isLoading);
                     },
                   ),
 
@@ -99,7 +159,8 @@ class _DashboardStatsState extends State<DashboardStats> {
                   BlocBuilder<ParkingSpaceBloc, ParkingSpaceState>(
                     builder: (context, state) {
                       final spaces = _getParkingSpacesFromState(state);
-                      return _buildStatItem(context, spaces.length.toString(), 'Spaces');
+                      final isLoading = state.runtimeType.toString().toLowerCase().contains('loading');
+                      return _buildStatItem(context, spaces.length.toString(), 'Spaces', isLoading);
                     },
                   ),
 
@@ -107,7 +168,7 @@ class _DashboardStatsState extends State<DashboardStats> {
                   BlocBuilder<ParkingBloc, ParkingState>(
                     builder: (context, state) {
                       final activeParking = _getActiveParkingFromState(state);
-                      return _buildStatItem(context, activeParking.length.toString(), 'Parked');
+                      return _buildStatItem(context, activeParking.length.toString(), 'Parked', state is ParkingLoading);
                     },
                   ),
 
@@ -122,7 +183,8 @@ class _DashboardStatsState extends State<DashboardStats> {
                             return status.contains('vacant') || status.contains('available');
                           }).length;
 
-                      return _buildStatItem(context, availableSpaces.toString(), 'Available');
+                      final isLoading = state.runtimeType.toString().toLowerCase().contains('loading');
+                      return _buildStatItem(context, availableSpaces.toString(), 'Available', isLoading);
                     },
                   ),
                 ],
@@ -134,16 +196,19 @@ class _DashboardStatsState extends State<DashboardStats> {
     );
   }
 
-  Widget _buildStatItem(BuildContext context, String value, String label) {
+  Widget _buildStatItem(BuildContext context, String value, String label, [bool isLoading = false]) {
     return Column(
       children: [
-        Text(
-          value,
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).brightness == Brightness.dark ? ParkOSColors.terminalGreen : ParkOSColors.darkGreen,
-          ),
-        ),
+        isLoading
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+            : Text(
+              value,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).brightness == Brightness.dark ? ParkOSColors.terminalGreen : ParkOSColors.darkGreen,
+              ),
+            ),
+        const SizedBox(height: 4),
         Text(label, style: Theme.of(context).textTheme.bodyMedium),
       ],
     );

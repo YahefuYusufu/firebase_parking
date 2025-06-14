@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:firebase_parking/data/models/notification/notification_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -12,15 +13,20 @@ abstract class NotificationLocalDataSource {
   Future<void> scheduleNotificationWithActions(NotificationModel notification, {bool includeExtendAction = false});
   Future<void> cancelNotification(int id);
   Future<void> cancelAllNotifications();
+  Future<void> cancelNotificationsForParking(String parkingId); // NEW: Cancel specific parking notifications
   Future<bool> requestPermissions();
   Future<bool> areNotificationsEnabled();
-  Future<void> clearAllPendingNotifications(); // ADD THIS
+  Future<void> clearAllPendingNotifications();
 }
 
 class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
   late FlutterLocalNotificationsPlugin _plugin;
   bool _isInitialized = false;
-  int _currentBadgeCount = 0; // Track badge count
+  int _currentBadgeCount = 0;
+
+  // NEW: Track active notifications to prevent conflicts
+  final Map<String, List<int>> _activeNotificationsByParking = {};
+  final Set<int> _usedNotificationIds = {};
 
   @override
   Future<FlutterLocalNotificationsPlugin> initialize() async {
@@ -34,16 +40,10 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     InitializationSettings? initializationSettings;
 
     if (Platform.isAndroid) {
-      // Android initialization settings
-      const initializationSettingsAndroid = AndroidInitializationSettings(
-        '@mipmap/ic_launcher', // Use app icon instead
-      );
-
+      const initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
       initializationSettings = const InitializationSettings(android: initializationSettingsAndroid);
     } else if (Platform.isIOS) {
-      // iOS initialization settings
       const initializationSettingsIOS = DarwinInitializationSettings(requestAlertPermission: true, requestBadgePermission: true, requestSoundPermission: true);
-
       initializationSettings = const InitializationSettings(iOS: initializationSettingsIOS);
     }
 
@@ -62,20 +62,69 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     return _plugin;
   }
 
+  // NEW: Generate truly unique notification IDs
+  int _generateUniqueNotificationId() {
+    int id;
+    int attempts = 0;
+
+    do {
+      // Combine timestamp, random number, and attempt counter for uniqueness
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final random = Random().nextInt(10000);
+      id = ((timestamp + random + attempts) % 2147483647).toInt();
+      attempts++;
+
+      if (attempts > 100) {
+        // Fallback: use timestamp + large random
+        id = ((timestamp + Random().nextInt(1000000)) % 2147483647).toInt();
+        break;
+      }
+    } while (_usedNotificationIds.contains(id));
+
+    _usedNotificationIds.add(id);
+    print("🆔 Generated unique notification ID: $id (attempts: $attempts)");
+
+    return id;
+  }
+
+  // NEW: Cancel all notifications for a specific parking session
+  @override
+  Future<void> cancelNotificationsForParking(String parkingId) async {
+    await initialize();
+
+    final notificationIds = _activeNotificationsByParking[parkingId];
+    if (notificationIds != null && notificationIds.isNotEmpty) {
+      print("🗑️ Cancelling ${notificationIds.length} notifications for parking: $parkingId");
+
+      for (final id in notificationIds) {
+        try {
+          await _plugin.cancel(id);
+          _usedNotificationIds.remove(id);
+          print("❌ Cancelled notification ID: $id");
+        } catch (e) {
+          print("❌ Failed to cancel notification $id: $e");
+        }
+      }
+
+      // Clear tracking for this parking
+      _activeNotificationsByParking.remove(parkingId);
+      print("🧹 Cleared tracking for parking: $parkingId");
+    } else {
+      print("ℹ️ No active notifications found for parking: $parkingId");
+    }
+  }
+
   void _onNotificationTapped(NotificationResponse response) {
     print("🔔 Notification tapped: ${response.payload}");
     print("🔔 Action ID: ${response.actionId}");
 
-    // Handle different actions
     if (response.actionId != null) {
       _handleNotificationAction(response.actionId!, response.payload);
     } else {
-      // Regular notification tap - navigate to parking details
       _handleNotificationTap(response.payload);
     }
   }
 
-  // NEW: Handle notification actions
   void _handleNotificationAction(String actionId, String? parkingId) {
     print("🎬 Handling action: $actionId for parking: $parkingId");
 
@@ -94,7 +143,6 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     }
   }
 
-  // NEW: Handle extend parking action
   void _handleExtendParking(String? parkingId, Duration extension) {
     if (parkingId == null) {
       print("❌ Cannot extend parking: parkingId is null");
@@ -102,38 +150,21 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     }
 
     print("⏰ Extending parking $parkingId by ${extension.inMinutes} minutes");
-
-    // TO2DO: You'll need to emit this to your BLoC or use a callback
-    // For now, we'll just log it and show confirmation
     print("🚀 Would extend parking $parkingId by $extension");
 
-    // Show confirmation notification
     _showExtensionConfirmation(extension);
   }
 
-  // NEW: Handle view parking details action
   void _handleViewParkingDetails(String? parkingId) {
-    if (parkingId == null) {
-      print("❌ Cannot view parking: parkingId is null");
-      return;
-    }
-
+    if (parkingId == null) return;
     print("👁️ Opening parking details for: $parkingId");
-    // TOD2O: Navigate to parking details screen
   }
 
-  // NEW: Handle regular notification tap
   void _handleNotificationTap(String? parkingId) {
-    if (parkingId == null) {
-      print("❌ Cannot handle tap: parkingId is null");
-      return;
-    }
-
+    if (parkingId == null) return;
     print("📱 Opening parking details for: $parkingId");
-    // TO2DO: Navigate to parking details screen
   }
 
-  // NEW: Show extension confirmation
   Future<void> _showExtensionConfirmation(Duration extension) async {
     try {
       const androidDetails = AndroidNotificationDetails(
@@ -148,7 +179,7 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
       const notificationDetails = NotificationDetails(android: androidDetails);
 
       await _plugin.show(
-        999999, // Use a unique ID for confirmations
+        _generateUniqueNotificationId(), // Use unique ID
         '✅ Extension Requested',
         'Parking extended by ${extension.inMinutes} minutes. Please confirm in the app.',
         notificationDetails,
@@ -161,15 +192,11 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
   }
 
   Future<void> _configureLocalTimeZone() async {
-    if (kIsWeb || Platform.isLinux) {
-      return;
-    }
+    if (kIsWeb || Platform.isLinux) return;
 
     tz.initializeTimeZones();
 
-    if (Platform.isWindows) {
-      return;
-    }
+    if (Platform.isWindows) return;
 
     try {
       final String timeZoneName = await FlutterTimezone.getLocalTimezone();
@@ -186,7 +213,11 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     await initialize();
     await requestPermissions();
 
-    // Validation: Check if scheduled time is in the future
+    // NEW: Cancel previous notifications for this parking session
+    if (notification.parkingId != null) {
+      await cancelNotificationsForParking(notification.parkingId!);
+    }
+
     final now = DateTime.now();
     final scheduledTime = notification.scheduledTime;
 
@@ -196,15 +227,12 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
 
     if (scheduledTime.isBefore(now) || scheduledTime.isAtSameMomentAs(now)) {
       print("❌ ERROR: Scheduled time is not in the future!");
-      print("❌ Current: $now");
-      print("❌ Scheduled: $scheduledTime");
 
-      // Auto-fix: Schedule 5 seconds from now
       final correctedTime = now.add(const Duration(seconds: 5));
       print("🔧 Auto-correcting to: $correctedTime");
 
       final correctedNotification = NotificationModel(
-        id: notification.id,
+        id: _generateUniqueNotificationId(), // Generate new unique ID
         title: notification.title,
         body: "${notification.body} [Auto-corrected]",
         scheduledTime: correctedTime,
@@ -212,72 +240,80 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
         type: notification.type,
       );
 
-      // Recursively call with corrected time
       return await scheduleNotification(correctedNotification);
     }
 
-    // Increment badge count for each notification
+    // Generate unique ID for this notification
+    final uniqueId = _generateUniqueNotificationId();
+
+    // Track this notification
+    if (notification.parkingId != null) {
+      _activeNotificationsByParking[notification.parkingId!] = (_activeNotificationsByParking[notification.parkingId!] ?? [])..add(uniqueId);
+    }
+
+    // Increment badge count
     _currentBadgeCount++;
 
     // Create platform-specific notification details
     NotificationDetails notificationDetails;
 
     if (Platform.isAndroid) {
-      // Android notification details
-      const androidDetails = AndroidNotificationDetails(
-        'parking_channel', // Channel ID
-        'Parking Reminders', // Channel name
+      final androidDetails = AndroidNotificationDetails(
+        'parking_channel_${uniqueId % 10}', // Keep braces for expressions
+        'Parking Reminders',
         channelDescription: 'Notifications for parking reminders and alerts',
         importance: Importance.max,
         priority: Priority.high,
-        ticker: 'Parking Reminder',
+        ticker: 'Parking Reminder ${DateTime.now().millisecondsSinceEpoch}', // Keep braces for expressions
         showWhen: true,
+        when: scheduledTime.millisecondsSinceEpoch, // NEW: Explicit timestamp
         icon: '@mipmap/ic_launcher',
-        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
-        styleInformation: BigTextStyleInformation(''),
+        largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+        styleInformation: BigTextStyleInformation(
+          notification.body,
+          contentTitle: notification.title,
+          summaryText: 'Parking Alert $uniqueId', // Removed unnecessary braces
+        ),
         category: AndroidNotificationCategory.alarm,
         fullScreenIntent: true,
         visibility: NotificationVisibility.public,
         enableVibration: true,
         playSound: true,
         autoCancel: true,
+        ongoing: false, // NEW: Ensure notifications can be dismissed
+        onlyAlertOnce: false, // NEW: Always alert
+        tag: 'parking_${notification.parkingId}_$uniqueId', // Mixed: keep braces for complex, remove for simple
       );
 
-      notificationDetails = const NotificationDetails(android: androidDetails);
+      notificationDetails = NotificationDetails(android: androidDetails);
     } else if (Platform.isIOS) {
-      // iOS notification details
       final iosDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
         sound: 'default',
         badgeNumber: _currentBadgeCount,
-        threadIdentifier: 'parking_notifications',
+        threadIdentifier: 'parking_${notification.parkingId}_$uniqueId', // Mixed interpolation
+        subtitle: 'Parking Alert $uniqueId', // Removed unnecessary braces
+        attachments: [], // NEW: Empty attachments to prevent grouping issues
       );
 
       notificationDetails = NotificationDetails(iOS: iosDetails);
     } else {
-      // Fallback for other platforms
       notificationDetails = const NotificationDetails();
     }
 
     final scheduledDate = tz.TZDateTime.from(notification.scheduledTime, tz.local);
 
-    print("⏰ Scheduling notification ID: ${notification.id}");
+    print("⏰ Scheduling notification ID: $uniqueId (original: ${notification.id})");
     print("📅 Scheduled for: ${scheduledDate.toIso8601String()}");
     print("📝 Title: ${notification.title}");
     print("🔢 Badge number: $_currentBadgeCount");
-    print(
-      "📱 Platform: ${Platform.isAndroid
-          ? 'Android'
-          : Platform.isIOS
-          ? 'iOS'
-          : 'Other'}",
-    );
+    print("🏷️ Parking ID: ${notification.parkingId}");
 
     try {
       await _plugin.zonedSchedule(
-        notification.id,
+        uniqueId, // Use the unique ID we generated
         notification.title,
         notification.body,
         scheduledDate,
@@ -287,20 +323,30 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       );
 
-      print("✅ Notification scheduled successfully");
+      print("✅ Notification scheduled successfully with unique ID: $uniqueId");
     } catch (e) {
       print("❌ Failed to schedule notification: $e");
+
+      // Remove from tracking if failed
+      if (notification.parkingId != null) {
+        _activeNotificationsByParking[notification.parkingId!]?.remove(uniqueId);
+      }
+      _usedNotificationIds.remove(uniqueId);
+
       rethrow;
     }
   }
 
-  // NEW: Schedule notification with action buttons
   @override
   Future<void> scheduleNotificationWithActions(NotificationModel notification, {bool includeExtendAction = false}) async {
     await initialize();
     await requestPermissions();
 
-    // Validation: Check if scheduled time is in the future
+    // Cancel previous notifications for this parking session
+    if (notification.parkingId != null) {
+      await cancelNotificationsForParking(notification.parkingId!);
+    }
+
     final now = DateTime.now();
     final scheduledTime = notification.scheduledTime;
 
@@ -312,74 +358,61 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
       return;
     }
 
+    final uniqueId = _generateUniqueNotificationId();
+
+    // Track this notification
+    if (notification.parkingId != null) {
+      _activeNotificationsByParking[notification.parkingId!] = (_activeNotificationsByParking[notification.parkingId!] ?? [])..add(uniqueId);
+    }
+
     _currentBadgeCount++;
 
-    // Create platform-specific notification details with actions
     NotificationDetails notificationDetails;
 
     if (Platform.isAndroid) {
-      // Create action buttons
       List<AndroidNotificationAction> actions = [];
 
       if (includeExtendAction) {
         actions.addAll([
-          const AndroidNotificationAction(
-            'extend_30',
-            'Extend 30min',
-            // REMOVED: icon (causing visibility issues)
-            contextual: false, // Changed to false
-            showsUserInterface: true, // NEW: Force show UI
-          ),
-          const AndroidNotificationAction(
-            'extend_60',
-            'Extend 1h',
-            // REMOVED: icon (causing visibility issues)
-            contextual: false, // Changed to false
-            showsUserInterface: true, // NEW: Force show UI
-          ),
-          const AndroidNotificationAction(
-            'view_parking',
-            'View Details',
-            // REMOVED: icon (causing visibility issues)
-            contextual: false, // Changed to false
-            showsUserInterface: true, // NEW: Force show UI
-          ),
+          const AndroidNotificationAction('extend_30', 'Extend 30min', contextual: false, showsUserInterface: true),
+          const AndroidNotificationAction('extend_60', 'Extend 1h', contextual: false, showsUserInterface: true),
+          const AndroidNotificationAction('view_parking', 'View Details', contextual: false, showsUserInterface: true),
         ]);
       }
 
-      // Android notification details with actions
       final androidDetails = AndroidNotificationDetails(
-        'parking_channel',
-        'Parking Reminders',
-        channelDescription: 'Notifications for parking reminders and alerts',
+        'parking_actions_${uniqueId % 10}', // Keep braces for expressions
+        'Parking Reminders with Actions',
+        channelDescription: 'Interactive parking notifications',
         importance: Importance.max,
         priority: Priority.high,
-        ticker: 'Parking Reminder',
+        ticker: 'Parking Action ${DateTime.now().millisecondsSinceEpoch}',
         showWhen: true,
+        when: scheduledTime.millisecondsSinceEpoch,
         icon: '@mipmap/ic_launcher',
         largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
-        styleInformation: const BigTextStyleInformation(''),
+        styleInformation: BigTextStyleInformation(notification.body, contentTitle: notification.title, summaryText: 'Interactive Alert $uniqueId'),
         category: AndroidNotificationCategory.alarm,
         fullScreenIntent: true,
         visibility: NotificationVisibility.public,
         enableVibration: true,
-        // REMOVED: enableLights, ledOnMs, ledOffMs (causing crash)
         playSound: true,
         autoCancel: true,
-        actions: actions, // Add action buttons
+        actions: actions,
+        tag: 'parking_action_${notification.parkingId}_$uniqueId',
       );
 
       notificationDetails = NotificationDetails(android: androidDetails);
     } else if (Platform.isIOS) {
-      // iOS notification details (iOS also supports actions)
       final iosDetails = DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
         sound: 'default',
         badgeNumber: _currentBadgeCount,
-        threadIdentifier: 'parking_notifications',
+        threadIdentifier: 'parking_action_${notification.parkingId}_$uniqueId',
         categoryIdentifier: includeExtendAction ? 'PARKING_EXTEND' : 'PARKING_DEFAULT',
+        subtitle: 'Interactive Alert $uniqueId',
       );
 
       notificationDetails = NotificationDetails(iOS: iosDetails);
@@ -389,13 +422,12 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
 
     final scheduledDate = tz.TZDateTime.from(notification.scheduledTime, tz.local);
 
-    print("⏰ Scheduling notification with actions: ${notification.id}");
-    print("📅 Scheduled for: ${scheduledDate.toIso8601String()}");
+    print("⏰ Scheduling interactive notification: $uniqueId");
     print("🔘 Include extend action: $includeExtendAction");
 
     try {
       await _plugin.zonedSchedule(
-        notification.id,
+        uniqueId,
         notification.title,
         notification.body,
         scheduledDate,
@@ -405,9 +437,16 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       );
 
-      print("✅ Notification with actions scheduled successfully");
+      print("✅ Interactive notification scheduled successfully");
     } catch (e) {
-      print("❌ Failed to schedule notification with actions: $e");
+      print("❌ Failed to schedule interactive notification: $e");
+
+      // Remove from tracking if failed
+      if (notification.parkingId != null) {
+        _activeNotificationsByParking[notification.parkingId!]?.remove(uniqueId);
+      }
+      _usedNotificationIds.remove(uniqueId);
+
       rethrow;
     }
   }
@@ -418,14 +457,13 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
 
     try {
       await _plugin.cancel(id);
+      _usedNotificationIds.remove(id);
 
-      // Decrease badge count when cancelling
       if (_currentBadgeCount > 0) {
         _currentBadgeCount--;
       }
 
       print("❌ Cancelled notification ID: $id");
-      print("🔢 Badge count after cancel: $_currentBadgeCount");
     } catch (e) {
       print("❌ Failed to cancel notification: $e");
       rethrow;
@@ -439,11 +477,12 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     try {
       await _plugin.cancelAll();
 
-      // Reset badge count
+      // Clear all tracking
+      _activeNotificationsByParking.clear();
+      _usedNotificationIds.clear();
       _currentBadgeCount = 0;
 
-      print("🗑️ Cancelled all notifications");
-      print("🔢 Badge count reset to: $_currentBadgeCount");
+      print("🗑️ Cancelled all notifications and cleared tracking");
     } catch (e) {
       print("❌ Failed to cancel all notifications: $e");
       rethrow;
@@ -467,7 +506,7 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
         return result ?? false;
       } else {
         print("🔐 Platform not supported for permission requests");
-        return true; // Assume granted for other platforms
+        return true;
       }
     } catch (e) {
       print("❌ Error requesting permissions: $e");
@@ -493,7 +532,7 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
         return result ?? false;
       } else {
         print("✅ Platform not supported for checking notifications");
-        return true; // Assume enabled for other platforms
+        return true;
       }
     } catch (e) {
       print("❌ Error checking notification status: $e");
@@ -501,14 +540,15 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     }
   }
 
-  // NEW: Clear all pending notifications to fix LED crash
   @override
   Future<void> clearAllPendingNotifications() async {
     await initialize();
 
     try {
       await _plugin.cancelAll();
-      print("🗑️ Cleared all pending notifications to fix LED issue");
+      _activeNotificationsByParking.clear();
+      _usedNotificationIds.clear();
+      print("🗑️ Cleared all pending notifications");
     } catch (e) {
       print("❌ Failed to clear notifications: $e");
     }
