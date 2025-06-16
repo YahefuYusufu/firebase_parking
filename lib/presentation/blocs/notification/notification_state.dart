@@ -41,6 +41,18 @@ class ParkingRemindersScheduled extends NotificationState {
   List<Object?> get props => [parkingId, notificationIds];
 }
 
+// NEW: Parking extension handled state
+class ParkingExtensionHandled extends NotificationState {
+  final String parkingId;
+  final Duration additionalTime;
+  final List<int> notificationIds;
+
+  const ParkingExtensionHandled({required this.parkingId, required this.additionalTime, required this.notificationIds});
+
+  @override
+  List<Object?> get props => [parkingId, additionalTime, notificationIds];
+}
+
 class ParkingNotificationShown extends NotificationState {
   final String message;
 

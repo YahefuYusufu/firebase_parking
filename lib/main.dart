@@ -72,6 +72,7 @@ import 'package:firebase_parking/services/service_locator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // NEW: Add this import
 import 'package:provider/provider.dart';
 
 // Global navigator key for navigation outside of context
@@ -80,15 +81,24 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // EMERGENCY: Clear all notifications immediately to prevent LED crash
+  try {
+    final plugin = FlutterLocalNotificationsPlugin();
+    await plugin.cancelAll();
+    print("🚨 EMERGENCY: Cleared all notifications at startup to prevent LED crash");
+  } catch (e) {
+    print("⚠️ Could not clear notifications at startup: $e");
+  }
+
   // Load environment variables
   await dotenv.load(fileName: ".env");
 
   // Initialize Firebase
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-    print("Firebase initialized successfully");
+    print("✅ Firebase initialized successfully");
   } catch (e) {
-    print("Failed to initialize Firebase: $e");
+    print("❌ Failed to initialize Firebase: $e");
   }
 
   // Initialize service locator (dependency injection)
@@ -267,7 +277,15 @@ void setupServiceLocator() {
 
   // Register ParkingBloc with NotificationBloc dependency
   sl.registerFactoryParam<ParkingBloc, NotificationBloc, void>(
-    (notificationBloc, _) => ParkingBloc(createParking: sl(), getParking: sl(), getActiveParking: sl(), getUserParking: sl(), endParking: sl(), notificationBloc: notificationBloc),
+    (notificationBloc, _) => ParkingBloc(
+      createParking: sl(),
+      getParking: sl(),
+      getActiveParking: sl(),
+      getUserParking: sl(),
+      endParking: sl(),
+      notificationBloc: notificationBloc,
+      parkingRepository: sl(),
+    ),
   );
 
   // Register IssueBloc

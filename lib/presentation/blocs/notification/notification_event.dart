@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:firebase_parking/domain/entities/parking_entity.dart';
 
 abstract class NotificationEvent extends Equatable {
   const NotificationEvent();
@@ -26,27 +27,60 @@ class ScheduleParkingReminders extends NotificationEvent {
   List<Object?> get props => [parkingId, vehicleRegistration, parkingStartTime];
 }
 
-class ShowParkingStartedNotification extends NotificationEvent {
-  final String parkingId;
-  final String vehicleRegistration;
-  final String parkingSpaceNumber;
+// NEW: Schedule reminders based on ParkingEntity (recommended)
+class ScheduleEntityBasedReminders extends NotificationEvent {
+  final ParkingEntity parking;
 
-  const ShowParkingStartedNotification({required this.parkingId, required this.vehicleRegistration, required this.parkingSpaceNumber});
+  const ScheduleEntityBasedReminders({required this.parking});
 
   @override
-  List<Object?> get props => [parkingId, vehicleRegistration, parkingSpaceNumber];
+  List<Object> get props => [parking];
 }
 
-class ShowParkingEndedNotification extends NotificationEvent {
+// NEW: Schedule test reminders for development
+class ScheduleTestReminders extends NotificationEvent {
   final String parkingId;
   final String vehicleRegistration;
-  final Duration duration;
-  final double cost;
+  final DateTime parkingStartTime;
 
-  const ShowParkingEndedNotification({required this.parkingId, required this.vehicleRegistration, required this.duration, required this.cost});
+  const ScheduleTestReminders({required this.parkingId, required this.vehicleRegistration, required this.parkingStartTime});
 
   @override
-  List<Object?> get props => [parkingId, vehicleRegistration, duration, cost];
+  List<Object> get props => [parkingId, vehicleRegistration, parkingStartTime];
+}
+
+// NEW: Handle parking extension
+class HandleParkingExtension extends NotificationEvent {
+  final String parkingId;
+  final String vehicleRegistration;
+  final Duration additionalTime;
+  final DateTime newExpiryTime;
+  final String? parkingSpaceNumber;
+
+  const HandleParkingExtension({required this.parkingId, required this.vehicleRegistration, required this.additionalTime, required this.newExpiryTime, this.parkingSpaceNumber});
+
+  @override
+  List<Object?> get props => [parkingId, vehicleRegistration, additionalTime, newExpiryTime, parkingSpaceNumber];
+}
+
+// Updated to use ParkingEntity
+class ShowParkingStartedNotification extends NotificationEvent {
+  final ParkingEntity parking;
+
+  const ShowParkingStartedNotification({required this.parking});
+
+  @override
+  List<Object> get props => [parking];
+}
+
+// Updated to use ParkingEntity
+class ShowParkingEndedNotification extends NotificationEvent {
+  final ParkingEntity parking;
+
+  const ShowParkingEndedNotification({required this.parking});
+
+  @override
+  List<Object> get props => [parking];
 }
 
 class CancelParkingNotifications extends NotificationEvent {
@@ -60,6 +94,10 @@ class CancelParkingNotifications extends NotificationEvent {
 
 class CancelAllNotifications extends NotificationEvent {
   const CancelAllNotifications();
+}
+
+class ClearAllPendingNotifications extends NotificationEvent {
+  const ClearAllPendingNotifications();
 }
 
 class CheckNotificationPermissions extends NotificationEvent {

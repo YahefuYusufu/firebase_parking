@@ -19,8 +19,181 @@ class NotificationModel extends NotificationEntity {
     return (DateTime.now().millisecondsSinceEpoch % 2147483647).toInt();
   }
 
-  // Create parking reminder notifications
-  static List<NotificationModel> createParkingReminders({required String parkingId, required String vehicleRegistration, required DateTime parkingStartTime}) {
+  // NEW: Create testing reminders with 20-second advance warning
+  static List<NotificationModel> createTestingReminders({
+    required String parkingId,
+    required String vehicleRegistration,
+    required DateTime parkingStartTime,
+    required Duration totalTimeLimit,
+    String? parkingSpaceNumber,
+  }) {
+    final List<NotificationModel> notifications = [];
+    final baseId = _generateSafeId();
+
+    final now = DateTime.now();
+    final expectedEndTime = parkingStartTime.add(totalTimeLimit);
+
+    print("🧪 TESTING MODE");
+    print("🕐 Current time: ${now.toIso8601String()}");
+    print("🕐 Parking start time: ${parkingStartTime.toIso8601String()}");
+    print("🕐 Expected end time: ${expectedEndTime.toIso8601String()}");
+    print("🕐 Total time limit: ${_formatDuration(totalTimeLimit)}");
+
+    // Only schedule if parking hasn't expired
+    if (expectedEndTime.isBefore(now)) {
+      print("⚠️ Parking has already expired, not scheduling reminders");
+      return notifications;
+    }
+
+    final space = parkingSpaceNumber != null ? " in space $parkingSpaceNumber" : "";
+
+    // For testing: 20 seconds before expiry (regardless of parking duration)
+    final testReminder = expectedEndTime.subtract(const Duration(seconds: 20));
+    if (testReminder.isAfter(now)) {
+      notifications.add(
+        NotificationModel(
+          id: baseId + 1,
+          title: "⚠️ Parking Expires in 20 Seconds!",
+          body: "$vehicleRegistration$space expires in 20 seconds. Extend now?",
+          scheduledTime: testReminder,
+          parkingId: parkingId,
+          type: NotificationType.parkingReminder,
+        ),
+      );
+      print("📅 20-second reminder scheduled for: ${testReminder.toIso8601String()}");
+    }
+
+    // Expiry notification
+    if (expectedEndTime.isAfter(now)) {
+      notifications.add(
+        NotificationModel(
+          id: baseId + 2,
+          title: "🚨 Parking Expired!",
+          body: "$vehicleRegistration$space has expired! Extend now to avoid penalties.",
+          scheduledTime: expectedEndTime,
+          parkingId: parkingId,
+          type: NotificationType.parkingExpiry,
+        ),
+      );
+      print("📅 Expiry notification scheduled for: ${expectedEndTime.toIso8601String()}");
+    }
+
+    return notifications;
+  }
+
+  // Create parking reminder notifications based on actual parking duration
+  static List<NotificationModel> createParkingReminders({
+    required String parkingId,
+    required String vehicleRegistration,
+    required DateTime parkingStartTime,
+    required Duration totalTimeLimit,
+    String? parkingSpaceNumber,
+    bool isTestMode = false, // NEW: Add test mode flag
+  }) {
+    // Use testing reminders for short duration or when explicitly in test mode
+    if (isTestMode || totalTimeLimit.inMinutes <= 2) {
+      return createTestingReminders(
+        parkingId: parkingId,
+        vehicleRegistration: vehicleRegistration,
+        parkingStartTime: parkingStartTime,
+        totalTimeLimit: totalTimeLimit,
+        parkingSpaceNumber: parkingSpaceNumber,
+      );
+    }
+
+    // Original production logic for longer parking sessions
+    final List<NotificationModel> notifications = [];
+    final baseId = _generateSafeId();
+
+    final now = DateTime.now();
+    final expectedEndTime = parkingStartTime.add(totalTimeLimit);
+
+    print("🕐 Current time: ${now.toIso8601String()}");
+    print("🕐 Parking start time: ${parkingStartTime.toIso8601String()}");
+    print("🕐 Expected end time: ${expectedEndTime.toIso8601String()}");
+    print("🕐 Total time limit: ${_formatDuration(totalTimeLimit)}");
+
+    // Only schedule notifications if parking hasn't expired yet
+    if (expectedEndTime.isBefore(now)) {
+      print("⚠️ Parking has already expired, not scheduling reminders");
+      return notifications;
+    }
+
+    final space = parkingSpaceNumber != null ? " in space $parkingSpaceNumber" : "";
+
+    // Schedule reminders based on parking duration
+    if (totalTimeLimit.inMinutes >= 30) {
+      // 15 minutes before expiry (for 30+ minute parking)
+      final reminder15Min = expectedEndTime.subtract(const Duration(minutes: 15));
+      if (reminder15Min.isAfter(now)) {
+        notifications.add(
+          NotificationModel(
+            id: baseId + 1,
+            title: "Parking Expires Soon",
+            body: "$vehicleRegistration$space expires in 15 minutes. Consider extending or moving your vehicle.",
+            scheduledTime: reminder15Min,
+            parkingId: parkingId,
+            type: NotificationType.parkingReminder,
+          ),
+        );
+        print("📅 15-minute reminder scheduled for: ${reminder15Min.toIso8601String()}");
+      }
+    }
+
+    if (totalTimeLimit.inMinutes >= 10) {
+      // 5 minutes before expiry (for 10+ minute parking)
+      final reminder5Min = expectedEndTime.subtract(const Duration(minutes: 5));
+      if (reminder5Min.isAfter(now)) {
+        notifications.add(
+          NotificationModel(
+            id: baseId + 2,
+            title: "Parking Expires Very Soon",
+            body: "$vehicleRegistration$space expires in 5 minutes! Time to extend or move.",
+            scheduledTime: reminder5Min,
+            parkingId: parkingId,
+            type: NotificationType.parkingReminder,
+          ),
+        );
+        print("📅 5-minute reminder scheduled for: ${reminder5Min.toIso8601String()}");
+      }
+    }
+
+    // Expiry notification (always schedule if not expired)
+    if (expectedEndTime.isAfter(now)) {
+      notifications.add(
+        NotificationModel(
+          id: baseId + 3,
+          title: "Parking Expired",
+          body: "$vehicleRegistration$space has expired! Move your vehicle to avoid penalties.",
+          scheduledTime: expectedEndTime,
+          parkingId: parkingId,
+          type: NotificationType.parkingExpiry,
+        ),
+      );
+      print("📅 Expiry notification scheduled for: ${expectedEndTime.toIso8601String()}");
+    }
+
+    // 5 minutes after expiry (grace period warning)
+    final gracePeriodWarning = expectedEndTime.add(const Duration(minutes: 5));
+    if (gracePeriodWarning.isAfter(now)) {
+      notifications.add(
+        NotificationModel(
+          id: baseId + 4,
+          title: "Grace Period Ending",
+          body: "$vehicleRegistration$space is 5 minutes overdue. Please move immediately!",
+          scheduledTime: gracePeriodWarning,
+          parkingId: parkingId,
+          type: NotificationType.parkingExpiry,
+        ),
+      );
+      print("📅 Grace period warning scheduled for: ${gracePeriodWarning.toIso8601String()}");
+    }
+
+    return notifications;
+  }
+
+  // Create test notifications (keep your existing test functionality)
+  static List<NotificationModel> createTestParkingReminders({required String parkingId, required String vehicleRegistration, required DateTime parkingStartTime}) {
     final List<NotificationModel> notifications = [];
     final baseId = _generateSafeId();
 
@@ -28,75 +201,173 @@ class NotificationModel extends NotificationEntity {
     final now = DateTime.now();
     final scheduleFrom = now.add(const Duration(seconds: 20));
 
-    print("🕐 Current time: ${now.toIso8601String()}");
-    print("🕐 Parking start time: ${parkingStartTime.toIso8601String()}");
-    print("🕐 Will schedule from: ${scheduleFrom.toIso8601String()}");
+    print("🧪 TEST MODE - Current time: ${now.toIso8601String()}");
+    print("🧪 TEST MODE - Will schedule from: ${scheduleFrom.toIso8601String()}");
 
-    // 30 seconds reminder (was 1 hour)
+    // 30 seconds reminder
     final firstNotificationTime = scheduleFrom.add(const Duration(seconds: 30));
     notifications.add(
       NotificationModel(
         id: baseId + 1,
-        title: "Parking Reminder",
+        title: "Test Parking Reminder",
         body: "You've been parked for 30 seconds with $vehicleRegistration (Test Notification)",
         scheduledTime: firstNotificationTime,
         parkingId: parkingId,
         type: NotificationType.parkingReminder,
       ),
     );
-    print("📅 First notification scheduled for: ${firstNotificationTime.toIso8601String()}");
 
-    // 1 minute reminder (was 2 hours)
+    // 1 minute reminder
     final secondNotificationTime = scheduleFrom.add(const Duration(minutes: 1, seconds: 10));
     notifications.add(
       NotificationModel(
         id: baseId + 2,
-        title: "Parking Reminder",
+        title: "Test Parking Reminder",
         body: "You've been parked for 1 minute with $vehicleRegistration (Test Notification)",
         scheduledTime: secondNotificationTime,
         parkingId: parkingId,
         type: NotificationType.parkingReminder,
       ),
     );
-    print("📅 Second notification scheduled for: ${secondNotificationTime.toIso8601String()}");
 
-    // 2 minute reminder (was 4 hours)
-    final thirdNotificationTime = scheduleFrom.add(const Duration(minutes: 2, seconds: 10));
+    return notifications;
+  }
+
+  // Create parking extension notification with action buttons
+  static NotificationModel createParkingExtended({
+    required String parkingId,
+    required String vehicleRegistration,
+    required Duration additionalTime,
+    required DateTime newExpiryTime,
+    String? parkingSpaceNumber,
+  }) {
+    final space = parkingSpaceNumber != null ? " in space $parkingSpaceNumber" : "";
+    final additionalTimeStr = _formatDuration(additionalTime);
+    final expiryTimeStr = "${newExpiryTime.hour.toString().padLeft(2, '0')}:${newExpiryTime.minute.toString().padLeft(2, '0')}";
+
+    return NotificationModel(
+      id: _generateSafeId(),
+      title: "Parking Extended",
+      body: "$vehicleRegistration$space extended by $additionalTimeStr. New expiry: $expiryTimeStr",
+      scheduledTime: DateTime.now(),
+      parkingId: parkingId,
+      type: NotificationType.parkingReminder,
+    );
+  }
+
+  // Create parking expiry notification with extend action
+  static NotificationModel createExpiryWithExtendAction({
+    required String parkingId,
+    required String vehicleRegistration,
+    required DateTime expiryTime,
+    String? parkingSpaceNumber,
+  }) {
+    final space = parkingSpaceNumber != null ? " in space $parkingSpaceNumber" : "";
+    final expiryTimeStr = "${expiryTime.hour.toString().padLeft(2, '0')}:${expiryTime.minute.toString().padLeft(2, '0')}";
+
+    return NotificationModel(
+      id: _generateSafeId(),
+      title: "Parking Expired!",
+      body: "$vehicleRegistration$space expired at $expiryTimeStr. Extend now to avoid penalties!",
+      scheduledTime: expiryTime,
+      parkingId: parkingId,
+      type: NotificationType.parkingExpiry,
+    );
+  }
+
+  // Update reminders after parking extension - with test mode support
+  static List<NotificationModel> createUpdatedReminders({
+    required String parkingId,
+    required String vehicleRegistration,
+    required DateTime newExpiryTime,
+    String? parkingSpaceNumber,
+    bool isTestMode = false, // NEW: Support test mode for extensions
+  }) {
+    final List<NotificationModel> notifications = [];
+    final baseId = _generateSafeId();
+    final now = DateTime.now();
+
+    if (newExpiryTime.isBefore(now)) {
+      print("⚠️ New expiry time is in the past, not scheduling updated reminders");
+      return notifications;
+    }
+
+    final space = parkingSpaceNumber != null ? " in space $parkingSpaceNumber" : "";
+
+    // For test mode or very short extensions, use 20-second reminder
+    if (isTestMode || newExpiryTime.difference(now).inMinutes <= 2) {
+      final testReminder = newExpiryTime.subtract(const Duration(seconds: 20));
+      if (testReminder.isAfter(now)) {
+        notifications.add(
+          NotificationModel(
+            id: baseId + 1,
+            title: "⚠️ Extended Parking Expires in 20 Seconds!",
+            body: "$vehicleRegistration$space (extended) expires in 20 seconds. Extend again?",
+            scheduledTime: testReminder,
+            parkingId: parkingId,
+            type: NotificationType.parkingReminder,
+          ),
+        );
+        print("📅 20-second extension reminder scheduled for: ${testReminder.toIso8601String()}");
+      }
+    } else {
+      // Production mode - normal timing
+      // 15 minutes before new expiry
+      final reminder15Min = newExpiryTime.subtract(const Duration(minutes: 15));
+      if (reminder15Min.isAfter(now)) {
+        notifications.add(
+          NotificationModel(
+            id: baseId + 1,
+            title: "Extended Parking Expires Soon",
+            body: "$vehicleRegistration$space expires in 15 minutes (extended session).",
+            scheduledTime: reminder15Min,
+            parkingId: parkingId,
+            type: NotificationType.parkingReminder,
+          ),
+        );
+      }
+
+      // 5 minutes before new expiry
+      final reminder5Min = newExpiryTime.subtract(const Duration(minutes: 5));
+      if (reminder5Min.isAfter(now)) {
+        notifications.add(
+          NotificationModel(
+            id: baseId + 2,
+            title: "Extended Parking Expires Very Soon",
+            body: "$vehicleRegistration$space expires in 5 minutes! (extended session)",
+            scheduledTime: reminder5Min,
+            parkingId: parkingId,
+            type: NotificationType.parkingReminder,
+          ),
+        );
+      }
+    }
+
+    // New expiry notification
     notifications.add(
       NotificationModel(
         id: baseId + 3,
-        title: "Long Parking Alert",
-        body: "You've been parked for 2 minutes with $vehicleRegistration. Test notification working! (Test Notification)",
-        scheduledTime: thirdNotificationTime,
+        title: "Extended Parking Expired",
+        body: "$vehicleRegistration$space has expired! (extended session ended)",
+        scheduledTime: newExpiryTime,
         parkingId: parkingId,
-        type: NotificationType.parkingReminder,
+        type: NotificationType.parkingExpiry,
       ),
     );
-    print("📅 Third notification scheduled for: ${thirdNotificationTime.toIso8601String()}");
-
-    // 3 minute reminder (was 8 hours)
-    final fourthNotificationTime = scheduleFrom.add(const Duration(minutes: 3, seconds: 10));
-    notifications.add(
-      NotificationModel(
-        id: baseId + 4,
-        title: "Daily Parking Reminder",
-        body: "You've been parked for 3 minutes with $vehicleRegistration. All notifications working! (Test Notification)",
-        scheduledTime: fourthNotificationTime,
-        parkingId: parkingId,
-        type: NotificationType.parkingReminder,
-      ),
-    );
-    print("📅 Fourth notification scheduled for: ${fourthNotificationTime.toIso8601String()}");
 
     return notifications;
   }
 
   // Create parking started notification
-  static NotificationModel createParkingStarted({required String parkingId, required String vehicleRegistration, required String parkingSpaceNumber}) {
+  static NotificationModel createParkingStarted({required String parkingId, required String vehicleRegistration, required String parkingSpaceNumber, required Duration timeLimit}) {
+    final timeLimitStr = _formatDuration(timeLimit);
+    final expectedEndTime = DateTime.now().add(timeLimit);
+    final endTimeStr = "${expectedEndTime.hour.toString().padLeft(2, '0')}:${expectedEndTime.minute.toString().padLeft(2, '0')}";
+
     return NotificationModel(
       id: _generateSafeId(),
       title: "Parking Started",
-      body: "$vehicleRegistration is now parked in space $parkingSpaceNumber",
+      body: "$vehicleRegistration is now parked in space $parkingSpaceNumber for $timeLimitStr (expires at $endTimeStr)",
       scheduledTime: DateTime.now(),
       parkingId: parkingId,
       type: NotificationType.parkingStarted,
@@ -104,19 +375,41 @@ class NotificationModel extends NotificationEntity {
   }
 
   // Create parking ended notification
-  static NotificationModel createParkingEnded({required String parkingId, required String vehicleRegistration, required Duration duration, required double cost}) {
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes % 60;
-    final durationText = hours > 0 ? "${hours}h ${minutes}m" : "${minutes}m";
+  static NotificationModel createParkingEnded({
+    required String parkingId,
+    required String vehicleRegistration,
+    required Duration actualDuration,
+    required double totalCost,
+    int extensionCount = 0,
+  }) {
+    final durationText = _formatDuration(actualDuration);
+    final extensionText = extensionCount > 0 ? " (with $extensionCount extension${extensionCount > 1 ? 's' : ''})" : "";
 
     return NotificationModel(
       id: _generateSafeId(),
       title: "Parking Ended",
-      body: "$vehicleRegistration parked for $durationText. Total cost: ${cost.toStringAsFixed(2)} kr",
+      body: "$vehicleRegistration parked for $durationText$extensionText. Total cost: ${totalCost.toStringAsFixed(2)} kr",
       scheduledTime: DateTime.now(),
       parkingId: parkingId,
       type: NotificationType.parkingEnded,
     );
+  }
+
+  // Helper method to format duration
+  static String _formatDuration(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    final seconds = duration.inSeconds % 60;
+
+    if (hours > 0 && minutes > 0) {
+      return '${hours}h ${minutes}m';
+    } else if (hours > 0) {
+      return '${hours}h';
+    } else if (minutes > 0) {
+      return '${minutes}m';
+    } else {
+      return '${seconds}s';
+    }
   }
 
   @override
