@@ -72,7 +72,7 @@ import 'package:firebase_parking/services/service_locator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // NEW: Add this import
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:provider/provider.dart';
 
 // Global navigator key for navigation outside of context
@@ -121,7 +121,19 @@ void main() async {
         // Add ParkingSpaceBloc provider
         BlocProvider<ParkingSpaceBloc>(create: (context) => sl<ParkingSpaceBloc>()),
         // Update ParkingBloc provider to include NotificationBloc
-        BlocProvider<ParkingBloc>(create: (context) => sl<ParkingBloc>(param1: context.read<NotificationBloc>())),
+        BlocProvider<ParkingBloc>(
+          create: (context) {
+            final notificationBloc = context.read<NotificationBloc>();
+            final parkingBloc = sl<ParkingBloc>(param1: notificationBloc);
+
+            // 🔗 CONNECT NOTIFICATION SERVICE TO PARKING BLOC
+            final notificationDataSource = sl<NotificationLocalDataSource>() as NotificationLocalDataSourceImpl;
+            notificationDataSource.setParkingBloc(parkingBloc);
+            print("🔗 Connected notification actions to ParkingBloc");
+
+            return parkingBloc;
+          },
+        ),
         // Add IssueBloc provider
         BlocProvider<IssueBloc>(create: (context) => sl<IssueBloc>()),
       ],

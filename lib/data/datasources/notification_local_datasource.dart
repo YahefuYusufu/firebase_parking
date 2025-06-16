@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:firebase_parking/data/models/notification/notification_model.dart';
+import 'package:firebase_parking/presentation/blocs/parking/parking_bloc.dart'; // ADD THIS IMPORT
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -13,10 +14,11 @@ abstract class NotificationLocalDataSource {
   Future<void> scheduleNotificationWithActions(NotificationModel notification, {bool includeExtendAction = false});
   Future<void> cancelNotification(int id);
   Future<void> cancelAllNotifications();
-  Future<void> cancelNotificationsForParking(String parkingId); // NEW: Cancel specific parking notifications
+  Future<void> cancelNotificationsForParking(String parkingId);
   Future<bool> requestPermissions();
   Future<bool> areNotificationsEnabled();
   Future<void> clearAllPendingNotifications();
+  void setParkingBloc(ParkingBloc parkingBloc);
 }
 
 class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
@@ -24,9 +26,19 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
   bool _isInitialized = false;
   int _currentBadgeCount = 0;
 
-  // NEW: Track active notifications to prevent conflicts
+  // 🔗 NEW: ParkingBloc reference for handling notification actions
+  ParkingBloc? _parkingBloc;
+
+  // Track active notifications to prevent conflicts
   final Map<String, List<int>> _activeNotificationsByParking = {};
   final Set<int> _usedNotificationIds = {};
+
+  // 🔗 NEW: Method to inject ParkingBloc dependency
+  @override
+  void setParkingBloc(ParkingBloc parkingBloc) {
+    _parkingBloc = parkingBloc;
+    print("🔗 ParkingBloc connected to notification service");
+  }
 
   @override
   Future<FlutterLocalNotificationsPlugin> initialize() async {
@@ -62,20 +74,18 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     return _plugin;
   }
 
-  // NEW: Generate truly unique notification IDs
+  // Generate truly unique notification IDs
   int _generateUniqueNotificationId() {
     int id;
     int attempts = 0;
 
     do {
-      // Combine timestamp, random number, and attempt counter for uniqueness
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final random = Random().nextInt(10000);
       id = ((timestamp + random + attempts) % 2147483647).toInt();
       attempts++;
 
       if (attempts > 100) {
-        // Fallback: use timestamp + large random
         id = ((timestamp + Random().nextInt(1000000)) % 2147483647).toInt();
         break;
       }
@@ -87,7 +97,6 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     return id;
   }
 
-  // NEW: Cancel all notifications for a specific parking session
   @override
   Future<void> cancelNotificationsForParking(String parkingId) async {
     await initialize();
@@ -106,7 +115,6 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
         }
       }
 
-      // Clear tracking for this parking
       _activeNotificationsByParking.remove(parkingId);
       print("🧹 Cleared tracking for parking: $parkingId");
     } else {
@@ -143,26 +151,53 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     }
   }
 
+  // 🚀 FIXED: Now actually extends parking through ParkingBloc
   void _handleExtendParking(String? parkingId, Duration extension) {
     if (parkingId == null) {
       print("❌ Cannot extend parking: parkingId is null");
       return;
     }
 
-    print("⏰ Extending parking $parkingId by ${extension.inMinutes} minutes");
-    print("🚀 Would extend parking $parkingId by $extension");
+    if (_parkingBloc == null) {
+      print("❌ Cannot extend parking: ParkingBloc not connected");
+      return;
+    }
 
+    print("⏰ Extending parking $parkingId by ${extension.inMinutes} minutes via notification action");
+
+    // Calculate cost based on extension duration (you can adjust this logic)
+    final cost = _calculateExtensionCost(extension);
+
+    // 🎯 ACTUALLY DISPATCH THE EXTEND EVENT TO PARKING BLOC
+    _parkingBloc!.add(ExtendParkingEvent(parkingId: parkingId, additionalTime: extension, cost: cost, reason: 'User extension from notification action'));
+
+    // Show immediate confirmation
     _showExtensionConfirmation(extension);
+
+    print("✅ Extension event dispatched to ParkingBloc");
+  }
+
+  // 💰 Helper method to calculate extension cost
+  double _calculateExtensionCost(Duration extension) {
+    // Default hourly rate - you can make this configurable or get from parking data
+    const double defaultHourlyRate = 25.0;
+    final hours = extension.inMinutes / 60.0;
+    final cost = hours * defaultHourlyRate;
+
+    print("💰 Calculated extension cost: \$${cost.toStringAsFixed(2)} for ${extension.inMinutes} minutes");
+    return cost;
   }
 
   void _handleViewParkingDetails(String? parkingId) {
     if (parkingId == null) return;
     print("👁️ Opening parking details for: $parkingId");
+    // TO2DO: Navigate to parking details screen if needed
   }
 
   void _handleNotificationTap(String? parkingId) {
     if (parkingId == null) return;
     print("📱 Opening parking details for: $parkingId");
+    // TO2DO: Navigate to parking details screen if needed
   }
 
   Future<void> _showExtensionConfirmation(Duration extension) async {
@@ -178,12 +213,7 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
 
       const notificationDetails = NotificationDetails(android: androidDetails);
 
-      await _plugin.show(
-        _generateUniqueNotificationId(), // Use unique ID
-        '✅ Extension Requested',
-        'Parking extended by ${extension.inMinutes} minutes. Please confirm in the app.',
-        notificationDetails,
-      );
+      await _plugin.show(_generateUniqueNotificationId(), '✅ Extension Processing', 'Parking extension request sent. Check the app for confirmation.', notificationDetails);
 
       print("✅ Extension confirmation notification sent");
     } catch (e) {
@@ -213,7 +243,7 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     await initialize();
     await requestPermissions();
 
-    // NEW: Cancel previous notifications for this parking session
+    // Cancel previous notifications for this parking session
     if (notification.parkingId != null) {
       await cancelNotificationsForParking(notification.parkingId!);
     }
@@ -232,7 +262,7 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
       print("🔧 Auto-correcting to: $correctedTime");
 
       final correctedNotification = NotificationModel(
-        id: _generateUniqueNotificationId(), // Generate new unique ID
+        id: _generateUniqueNotificationId(),
         title: notification.title,
         body: "${notification.body} [Auto-corrected]",
         scheduledTime: correctedTime,
@@ -243,7 +273,6 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
       return await scheduleNotification(correctedNotification);
     }
 
-    // Generate unique ID for this notification
     final uniqueId = _generateUniqueNotificationId();
 
     // Track this notification
@@ -251,38 +280,30 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
       _activeNotificationsByParking[notification.parkingId!] = (_activeNotificationsByParking[notification.parkingId!] ?? [])..add(uniqueId);
     }
 
-    // Increment badge count
     _currentBadgeCount++;
 
-    // Create platform-specific notification details
     NotificationDetails notificationDetails;
 
     if (Platform.isAndroid) {
       final androidDetails = AndroidNotificationDetails(
-        'parking_channel_${uniqueId % 10}', // Keep braces for expressions
+        'parking_channel_${uniqueId % 10}',
         'Parking Reminders',
         channelDescription: 'Notifications for parking reminders and alerts',
         importance: Importance.max,
         priority: Priority.high,
-        ticker: 'Parking Reminder ${DateTime.now().millisecondsSinceEpoch}', // Keep braces for expressions
+        ticker: 'Parking Reminder ${DateTime.now().millisecondsSinceEpoch}',
         showWhen: true,
-        when: scheduledTime.millisecondsSinceEpoch, // NEW: Explicit timestamp
+        when: scheduledTime.millisecondsSinceEpoch,
         icon: '@mipmap/ic_launcher',
         largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
-        styleInformation: BigTextStyleInformation(
-          notification.body,
-          contentTitle: notification.title,
-          summaryText: 'Parking Alert $uniqueId', // Removed unnecessary braces
-        ),
+        styleInformation: BigTextStyleInformation(notification.body, contentTitle: notification.title, summaryText: 'Parking Alert $uniqueId'),
         category: AndroidNotificationCategory.alarm,
         fullScreenIntent: true,
         visibility: NotificationVisibility.public,
         enableVibration: true,
         playSound: true,
         autoCancel: true,
-        ongoing: false, // NEW: Ensure notifications can be dismissed
-        onlyAlertOnce: false, // NEW: Always alert
-        tag: 'parking_${notification.parkingId}_$uniqueId', // Mixed: keep braces for complex, remove for simple
+        tag: 'parking_${notification.parkingId}_$uniqueId',
       );
 
       notificationDetails = NotificationDetails(android: androidDetails);
@@ -293,9 +314,9 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
         presentSound: true,
         sound: 'default',
         badgeNumber: _currentBadgeCount,
-        threadIdentifier: 'parking_${notification.parkingId}_$uniqueId', // Mixed interpolation
-        subtitle: 'Parking Alert $uniqueId', // Removed unnecessary braces
-        attachments: [], // NEW: Empty attachments to prevent grouping issues
+        threadIdentifier: 'parking_${notification.parkingId}_$uniqueId',
+        subtitle: 'Parking Alert $uniqueId',
+        attachments: [],
       );
 
       notificationDetails = NotificationDetails(iOS: iosDetails);
@@ -313,7 +334,7 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
 
     try {
       await _plugin.zonedSchedule(
-        uniqueId, // Use the unique ID we generated
+        uniqueId,
         notification.title,
         notification.body,
         scheduledDate,
@@ -327,7 +348,6 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     } catch (e) {
       print("❌ Failed to schedule notification: $e");
 
-      // Remove from tracking if failed
       if (notification.parkingId != null) {
         _activeNotificationsByParking[notification.parkingId!]?.remove(uniqueId);
       }
@@ -381,7 +401,7 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
       }
 
       final androidDetails = AndroidNotificationDetails(
-        'parking_actions_${uniqueId % 10}', // Keep braces for expressions
+        'parking_actions_${uniqueId % 10}',
         'Parking Reminders with Actions',
         channelDescription: 'Interactive parking notifications',
         importance: Importance.max,
@@ -441,7 +461,6 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     } catch (e) {
       print("❌ Failed to schedule interactive notification: $e");
 
-      // Remove from tracking if failed
       if (notification.parkingId != null) {
         _activeNotificationsByParking[notification.parkingId!]?.remove(uniqueId);
       }
@@ -477,7 +496,6 @@ class NotificationLocalDataSourceImpl implements NotificationLocalDataSource {
     try {
       await _plugin.cancelAll();
 
-      // Clear all tracking
       _activeNotificationsByParking.clear();
       _usedNotificationIds.clear();
       _currentBadgeCount = 0;

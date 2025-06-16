@@ -82,11 +82,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Simple header without refresh button
-            Text('Dashboard', style: theme.textTheme.headlineMedium),
-
-            const SizedBox(height: 16),
-
             // Summary Statistics (no refresh button)
             DashboardStats(key: _dashboardStatsKey, onRefreshRequested: _forceRefreshAll),
 

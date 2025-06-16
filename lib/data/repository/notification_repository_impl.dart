@@ -106,7 +106,6 @@ class NotificationRepositoryImpl implements NotificationRepository {
     }
   }
 
-  // NEW: Schedule test reminders (for testing)
   @override
   Future<Either<Failure, List<int>>> scheduleTestReminders({required String parkingId, required String vehicleRegistration, required DateTime parkingStartTime}) async {
     try {
@@ -119,7 +118,6 @@ class NotificationRepositoryImpl implements NotificationRepository {
     }
   }
 
-  // NEW: Handle parking extension notifications
   @override
   Future<Either<Failure, List<int>>> handleParkingExtension({
     required String parkingId,

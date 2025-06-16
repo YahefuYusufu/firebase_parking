@@ -5,7 +5,7 @@ import 'package:firebase_parking/domain/usecases/parking/end_parking_usecase.dar
 import 'package:firebase_parking/domain/usecases/parking/get_active_parking_usecase.dart';
 import 'package:firebase_parking/domain/usecases/parking/get_parking_usecase.dart';
 import 'package:firebase_parking/domain/usecases/parking/get_user_parking_usecase.dart';
-import 'package:firebase_parking/domain/repositories/parking_repository.dart'; // For extension
+import 'package:firebase_parking/domain/repositories/parking_repository.dart';
 import 'package:firebase_parking/presentation/blocs/notification/notification_bloc.dart';
 import 'package:firebase_parking/presentation/blocs/notification/notification_event.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -19,7 +19,7 @@ class ParkingBloc extends Bloc<ParkingEvent, ParkingState> {
   final GetActiveParkingUseCase getActiveParking;
   final GetUserParkingUseCase getUserParking;
   final EndParkingUseCase endParking;
-  final ParkingRepository parkingRepository; // NEW: For extensions
+  final ParkingRepository parkingRepository;
   final NotificationBloc notificationBloc;
 
   ParkingBloc({
@@ -28,12 +28,12 @@ class ParkingBloc extends Bloc<ParkingEvent, ParkingState> {
     required this.getActiveParking,
     required this.getUserParking,
     required this.endParking,
-    required this.parkingRepository, // NEW
+    required this.parkingRepository,
     required this.notificationBloc,
   }) : super(ParkingInitial()) {
     on<CreateParkingEvent>(_onCreateParking);
-    on<CreateParkingWithDurationEvent>(_onCreateParkingWithDuration); // NEW
-    on<ExtendParkingEvent>(_onExtendParking); // NEW
+    on<CreateParkingWithDurationEvent>(_onCreateParkingWithDuration);
+    on<ExtendParkingEvent>(_onExtendParking);
     on<GetParkingEvent>(_onGetParking);
     on<GetActiveParkingEvent>(_onGetActiveParking);
     on<GetUserParkingEvent>(_onGetUserParking);
@@ -45,12 +45,7 @@ class ParkingBloc extends Bloc<ParkingEvent, ParkingState> {
     emit(ParkingLoading());
 
     try {
-      // Use default 2-hour duration for backward compatibility
-      final parking = await createParking.call(
-        vehicleId: event.vehicleId,
-        parkingSpaceId: event.parkingSpaceId,
-        timeLimit: const Duration(hours: 2), // Default duration
-      );
+      final parking = await createParking.call(vehicleId: event.vehicleId, parkingSpaceId: event.parkingSpaceId, timeLimit: const Duration(hours: 2));
 
       emit(ParkingCreated(parking));
       await _handleParkingCreatedNotifications(parking);
@@ -59,7 +54,7 @@ class ParkingBloc extends Bloc<ParkingEvent, ParkingState> {
     }
   }
 
-  // NEW: Create parking with specific duration
+  // Create parking with specific duration
   Future<void> _onCreateParkingWithDuration(CreateParkingWithDurationEvent event, Emitter<ParkingState> emit) async {
     emit(ParkingLoading());
 
@@ -80,19 +75,23 @@ class ParkingBloc extends Bloc<ParkingEvent, ParkingState> {
     }
   }
 
-  // NEW: Extend parking
+  // 🚀 ENHANCED: Better extension handling with proper state emission
   Future<void> _onExtendParking(ExtendParkingEvent event, Emitter<ParkingState> emit) async {
+    print("🚀 ParkingBloc: Processing ExtendParkingEvent for ${event.parkingId}");
     emit(ParkingLoading());
 
     try {
       // Extend the parking using repository
       final extendedParking = await parkingRepository.extendParking(event.parkingId, event.additionalTime, event.cost, reason: event.reason);
 
+      print("✅ ParkingBloc: Parking extended successfully");
+
+      // 🎯 EMIT SUCCESS STATE - This is what the UI listens for
       emit(ParkingExtended(extendedParking));
 
       // Handle extension notifications
       if (extendedParking.id != null && extendedParking.vehicleRegistration != null) {
-        print("🔄 Handling parking extension notifications");
+        print("🔔 ParkingBloc: Handling parking extension notifications");
 
         notificationBloc.add(
           HandleParkingExtension(
@@ -104,7 +103,20 @@ class ParkingBloc extends Bloc<ParkingEvent, ParkingState> {
           ),
         );
       }
+
+      // 🔄 ALSO EMIT UPDATED LIST STATE for immediate UI refresh
+      print("🔄 ParkingBloc: Refreshing active parking list after extension");
+      Future.delayed(const Duration(milliseconds: 500), () async {
+        try {
+          final updatedParkingList = await getActiveParking();
+          emit(ParkingListLoaded(updatedParkingList));
+          print("✅ ParkingBloc: Active parking list refreshed");
+        } catch (e) {
+          print("❌ ParkingBloc: Failed to refresh parking list: $e");
+        }
+      });
     } catch (e) {
+      print("❌ ParkingBloc: Extension failed: $e");
       emit(ParkingError(e.toString()));
     }
   }
@@ -173,21 +185,9 @@ class ParkingBloc extends Bloc<ParkingEvent, ParkingState> {
       print("🔔 Setting up notifications for ${parking.vehicleRegistration}");
       print("⏰ Time limit: ${parking.formattedTotalTimeLimit}");
 
-      // Show immediate "parking started" notification
       notificationBloc.add(ShowParkingStartedNotification(parking: parking));
 
-      // Schedule reminder notifications based on actual time limit
-      // For testing, you can switch between these:
-
-      // Production mode (real reminders based on time limit):
       notificationBloc.add(ScheduleEntityBasedReminders(parking: parking));
-
-      // Test mode (quick reminders for testing):
-      // notificationBloc.add(ScheduleTestReminders(
-      //   parkingId: parking.id!,
-      //   vehicleRegistration: parking.vehicleRegistration!,
-      //   parkingStartTime: parking.startedAt,
-      // ));
     }
   }
 }
