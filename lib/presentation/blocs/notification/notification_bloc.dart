@@ -20,7 +20,7 @@ class NotificationBloc extends Bloc<NotificationEvent, NotificationState> {
     on<CancelParkingNotifications>(_onCancelParkingNotifications);
     on<CancelAllNotifications>(_onCancelAllNotifications);
     on<CheckNotificationPermissions>(_onCheckNotificationPermissions);
-    on<ClearAllPendingNotifications>(_onClearAllPendingNotifications); // NEW
+    on<ClearAllPendingNotifications>(_onClearAllPendingNotifications);
   }
 
   Future<void> _onInitializeNotifications(InitializeNotifications event, Emitter<NotificationState> emit) async {
