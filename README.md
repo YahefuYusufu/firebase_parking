@@ -1,5 +1,5 @@
 Firebase Parking System 🚗
-A modern parking management system built with Flutter and Firebase, featuring real-time parking session tracking, vehicle management, and user profiles.
+A  parking management system built with Flutter and Firebase, featuring real-time parking session tracking, vehicle management, and user profiles.
 🌟 Features
 🔐 Authentication
 
